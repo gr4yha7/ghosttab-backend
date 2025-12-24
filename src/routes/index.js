@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userRoutes = require('./userRoutes');
+const friendRoutes = require('./friendRoutes');
 
 // Health check
 router.get('/health', (req, res) => {
@@ -9,5 +10,6 @@ router.get('/health', (req, res) => {
 
 // Mount route modules
 router.use('/users', userRoutes);
+router.use('/friends', friendRoutes);
 
 module.exports = router;
