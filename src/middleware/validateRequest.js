@@ -1,50 +1,57 @@
-const { ethers } = require('ethers');
+// Use dynamic import for ES module package (lazy initialization)
+let privy = null;
 
-const validateRequest = (req, res, next) => {
-  const { signer, signature, message } = req.body;
-  
-  // Validate required fields
-  if (!signer || !signature || !message) {
-    return res.status(400).json({
-      success: false,
-      error: 'signer, signature, and message are required'
+const getPrivyClient = async () => {
+  if (!privy) {
+    const { PrivyClient } = await import('@privy-io/node');
+    privy = new PrivyClient({
+      appId: process.env.PRIVY_APP_ID,
+      appSecret: process.env.PRIVY_APP_SECRET
     });
   }
-  
-  // Validate signer is a valid Ethereum address
-  if (!ethers.isAddress(signer)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid signer address format'
-    });
-  }
-  
+  return privy;
+};
+
+const authRequest = async (req, res, next) => {
+  const privyClient = await getPrivyClient();
+
+  const authToken = req.headers.authorization?.replace('Bearer ', '');
+
   try {
-    // Recover the signer from the signature
-    const recoveredAddress = ethers.verifyMessage(message, signature);
-    
-    // Normalize addresses to lowercase for comparison (Ethereum addresses are case-insensitive)
-    const normalizedRecovered = recoveredAddress.toLowerCase();
-    const normalizedSigner = signer.toLowerCase();
-    
-    // Verify the recovered signer matches the claimed signer
-    if (normalizedRecovered !== normalizedSigner) {
-      return res.status(401).json({
-        success: false,
-        error: 'Signature verification failed: signer mismatch'
-      });
-    }
-    
-    // Attach the verified signer to the request for use in controllers
-    req.verifiedSigner = normalizedSigner;
+    const authValid = await privyClient.utils().auth().verifyAuthToken(authToken);
+
     next();
   } catch (error) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid signature format or verification failed',
-      details: error.message
+      error: 'Token verification failed',
+      details: error
     });
   }
 };
 
-module.exports = { validateRequest };
+const validateUser = async (req, res, next) => {
+  const privyClient = await getPrivyClient();
+
+  const idToken = req.headers['privy-id-token'];
+
+  if (!idToken) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  
+  try {
+    // Parse and verify the token
+    const user = await privyClient.users().get({ id_token: idToken });
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid Token',
+      details: error
+    });
+  }
+
+};
+
+module.exports = { authRequest, validateUser };

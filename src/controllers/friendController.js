@@ -5,8 +5,10 @@ const logger = require('../utils/logger');
 class FriendController {
   async getUserFriends(req, res, next) {
     try {
-      const { verifiedSigner } = req.verifiedSigner;
-      const users = await friendService.getUserFriends(verifiedSigner);
+      const { linked_accounts } = req.user;
+      const email = linked_accounts.find((wallet) => wallet.type === "email")
+      const aptos_wallet = linked_accounts.find((wallet) => wallet.chain_type === "aptos")
+      const users = await friendService.getUserFriends(aptos_wallet.address);
       res.json({ success: true, data: users });
     } catch (error) {
       next(error);
@@ -15,8 +17,11 @@ class FriendController {
 
   async getPendingRequests(req, res, next) {
     try {
-      const { verifiedSigner } = req.verifiedSigner;
-      const requests = await friendService.getPendingRequests(verifiedSigner);
+        const { linked_accounts } = req.user;
+      const aptos_wallet = linked_accounts.find((wallet) => wallet.chain_type === "aptos")
+        console.log(aptos_wallet);
+        
+      const requests = await friendService.getPendingRequests(aptos_wallet.address);
       
       if (!requests) {
         return res.status(404).json({ 
@@ -61,33 +66,38 @@ class FriendController {
 
   async acceptRequest(req, res, next) {
     try {
-      const { id } = req.params;
-      const { name, email } = req.body;
-      const user = await userService.updateUser(id, name, email);
-      
-      if (!user) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'User not found' 
+        const verifiedSigner = req.verifiedSigner;
+        const { signature, message } = req.body;
+        const accept = await friendService.acceptRequest(verifiedSigner, signature, message);
+        
+        if (!accept) {
+          return res.status(404).json({ 
+            success: false, 
+            error: 'Request not found' 
+          });
+        }
+        
+        res.json({ 
+          success: true, 
+          message: 'Friend request accepted successfully'
         });
+      } catch (error) {
+        if (error.message === 'Mismatch Payload') {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Mismatch Payload' 
+          });
+        }
+        next(error);
       }
-      
-      res.json({ 
-        success: true, 
-        data: user,
-        message: 'User updated successfully'
-      });
-    } catch (error) {
-      next(error);
-    }
   }
 
-  async removeFriend(req, res, next) {
-    try {
-      const { id } = req.params;
-      const deleted = await userService.deleteUser(id);
+  async sendRequest(req, res, next) {
+    const verifiedSigner = req.verifiedSigner;
+      const { signature, message } = req.body;
+      const request = await friendService.sendFriendRequest(verifiedSigner, message, signature);
       
-      if (!deleted) {
+      if (!request) {
         return res.status(404).json({ 
           success: false, 
           error: 'User not found' 
@@ -96,12 +106,18 @@ class FriendController {
       
       res.json({ 
         success: true, 
-        message: 'User deleted successfully' 
+        message: 'Friend request sent successfully'
       });
     } catch (error) {
+      if (error.message === 'Mismatch Payload') {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Mismatch Payload' 
+        });
+      }
       next(error);
     }
-  }
+
 }
 
 module.exports = new FriendController();

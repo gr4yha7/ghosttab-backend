@@ -25,10 +25,10 @@ class UserService {
     return data;
   }
 
-  async createUser(username, email, wallet_address, avatar_url, created_at) {
+  async createUser(username, email, wallet_address, avatar_url) {
     const { data, error } = await supabase
       .from('users')
-      .insert([{ username, email, wallet_address, avatar_url, created_at }])
+      .insert([{ username, email, wallet_address, avatar_url, updated_at: new Date().toISOString() }])
       .select('username, email, wallet_address, avatar_url, created_at')
       .single();
 

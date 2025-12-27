@@ -31,8 +31,8 @@ class UserController {
 
   async createUser(req, res, next) {
     try {
-      const { username, email, wallet_address, avatar_url, created_at } = req.body;
-      const user = await userService.createUser(username, email, wallet_address, avatar_url, created_at);
+      const { username, email, wallet_address, avatar_url } = req.body;
+      const user = await userService.createUser(username, email, wallet_address, avatar_url);
       
       res.status(201).json({ 
         success: true, 
@@ -40,10 +40,24 @@ class UserController {
         message: 'User created successfully'
       });
     } catch (error) {
-      if (error.code === '23505') { // PostgreSQL unique violation
+      // Handle unique constraint violations
+      if (error.code === '23505') {
+        // Check which field caused the violation
+        if (error.message && error.message.includes('username')) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Username already exists' 
+          });
+        }
+        if (error.message && error.message.includes('email')) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Email already exists' 
+          });
+        }
         return res.status(400).json({ 
           success: false, 
-          error: 'Email already exists' 
+          error: 'Duplicate entry - this value already exists' 
         });
       }
       next(error);
