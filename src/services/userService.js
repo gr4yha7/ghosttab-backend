@@ -1,70 +1,65 @@
 const supabase = require('../config/database');
+let privy = null;
+
+const getPrivyClient = async () => {
+  if (!privy) {
+    const { PrivyClient } = await import('@privy-io/node');
+    privy = new PrivyClient({
+      appId: process.env.PRIVY_APP_ID,
+      appSecret: process.env.PRIVY_APP_SECRET
+    });
+  }
+  return privy;
+};
 
 class UserService {
   async getAllUsers() {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, username, wallet_address, avatar_url, trust_score_status, created_at, updated_at')
-      .order('id', { ascending: true });
+  const privyClient = await getPrivyClient();
 
-    if (error) throw error;
-    return data;
+  try {
+    const users = await privyClient.users().list();
+    return users;
+  } catch (error) {
+    throw error
+  }
   }
 
-  async getUserById(id) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, username, wallet_address, avatar_url, trust_score_status, created_at, updated_at')
-      .eq('id', id)
-      .single();
+  async getUserById(wallet) {
+    const privyClient = await getPrivyClient();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      throw error;
+    if (!wallet) {
+        return res.status(401).json({ message: 'Unauthorized' });
     }
-    return data;
+
+    try {
+        // Parse and verify the token
+        const user = await privyClient.users().get({ getByWalletAddress: wallet });
+        return user;
+      } catch (error) {
+        throw error
+      }
   }
 
-  async createUser(username, email, wallet_address, avatar_url) {
-    const { data, error } = await supabase
-      .from('users')
-      .insert([{ username, email, wallet_address, avatar_url, updated_at: new Date().toISOString() }])
-      .select('username, email, wallet_address, avatar_url, created_at')
-      .single();
 
-    if (error) throw error;
-    return data;
-  }
+  async updateUser(id, username, country, avatar_url) {
+    const privyClient = await getPrivyClient();
+    console.log("user_id", id)
 
-  async updateUser(id, name, email) {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ name, email, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select('id, name, email, created_at, updated_at')
-      .single();
+    try {
+        // Parse and verify the token
+        const user = await privyClient.users().setCustomMetadata(id, {
+            custom_metadata: {
+            username: username,
+            country: country,
+            avatar_url: avatar_url
+            }
+        });
+        return user;
+      } catch (error) {
+        throw error
+      }
+      }
 
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      throw error;
-    }
-    return data;
-  }
-
-  async deleteUser(id) {
-    const { data, error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', id)
-      .select('id')
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      throw error;
-    }
-    return true;
-  }
 }
 
 module.exports = new UserService();

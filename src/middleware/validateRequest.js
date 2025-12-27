@@ -19,7 +19,7 @@ const authRequest = async (req, res, next) => {
 
   try {
     const authValid = await privyClient.utils().auth().verifyAuthToken(authToken);
-
+    req.user_id = authValid.user_id;
     next();
   } catch (error) {
     return res.status(400).json({
@@ -42,6 +42,7 @@ const validateUser = async (req, res, next) => {
   try {
     // Parse and verify the token
     const user = await privyClient.users().get({ id_token: idToken });
+    console.log("user", user)
     req.user = user;
     next();
   } catch (error) {

@@ -13,8 +13,8 @@ class UserController {
 
   async getUserById(req, res, next) {
     try {
-      const { id } = req.params;
-      const user = await userService.getUserById(id);
+      const wallet = req.params['wallet'];
+      const user = await userService.getUserById(wallet);
       
       if (!user) {
         return res.status(404).json({ 
@@ -29,80 +29,18 @@ class UserController {
     }
   }
 
-  async createUser(req, res, next) {
-    try {
-      const { username, email, wallet_address, avatar_url } = req.body;
-      const user = await userService.createUser(username, email, wallet_address, avatar_url);
-      
-      res.status(201).json({ 
-        success: true, 
-        data: user,
-        message: 'User created successfully'
-      });
-    } catch (error) {
-      // Handle unique constraint violations
-      if (error.code === '23505') {
-        // Check which field caused the violation
-        if (error.message && error.message.includes('username')) {
-          return res.status(400).json({ 
-            success: false, 
-            error: 'Username already exists' 
-          });
-        }
-        if (error.message && error.message.includes('email')) {
-          return res.status(400).json({ 
-            success: false, 
-            error: 'Email already exists' 
-          });
-        }
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Duplicate entry - this value already exists' 
-        });
-      }
-      next(error);
-    }
-  }
-
   async updateUser(req, res, next) {
     try {
-      const { id } = req.params;
-      const { name, email } = req.body;
-      const user = await userService.updateUser(id, name, email);
-      
-      if (!user) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'User not found' 
+      const { username, country, avatar_url } = req.body;
+      const user = await userService.updateUser(req.user_id, username, country, avatar_url);
+      if (user.custom_metadata) {
+        res.json({ 
+          success: true, 
+          data: user.custom_metadata,
+          message: 'User updated successfully'
         });
       }
-      
-      res.json({ 
-        success: true, 
-        data: user,
-        message: 'User updated successfully'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
 
-  async deleteUser(req, res, next) {
-    try {
-      const { id } = req.params;
-      const deleted = await userService.deleteUser(id);
-      
-      if (!deleted) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'User not found' 
-        });
-      }
-      
-      res.json({ 
-        success: true, 
-        message: 'User deleted successfully' 
-      });
     } catch (error) {
       next(error);
     }

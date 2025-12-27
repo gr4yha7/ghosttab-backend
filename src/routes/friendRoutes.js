@@ -7,5 +7,6 @@ router.get('/get-user-friends', [authRequest, validateUser], friendController.ge
 router.get('/get-pending-requests', [authRequest, validateUser], friendController.getPendingRequests);
 router.post('/cancel-request', [authRequest, validateUser], friendController.cancelRequest);
 router.put('/accept-request', [authRequest, validateUser], friendController.acceptRequest);
+router.post('/send-request', [authRequest, validateUser], friendController.sendRequest);
 
 module.exports = router;
