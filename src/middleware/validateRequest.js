@@ -19,7 +19,8 @@ const authRequest = async (req, res, next) => {
 
   try {
     const authValid = await privyClient.utils().auth().verifyAuthToken(authToken);
-    req.user_id = authValid.user_id;
+    req.user_id = authValid.user_id.replace(/^did:privy:/, '');
+    
     next();
   } catch (error) {
     return res.status(400).json({
@@ -30,29 +31,4 @@ const authRequest = async (req, res, next) => {
   }
 };
 
-const validateUser = async (req, res, next) => {
-  const privyClient = await getPrivyClient();
-
-  const idToken = req.headers['privy-id-token'];
-
-  if (!idToken) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  
-  try {
-    // Parse and verify the token
-    const user = await privyClient.users().get({ id_token: idToken });
-    console.log("user", user)
-    req.user = user;
-    next();
-  } catch (error) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid Token',
-      details: error
-    });
-  }
-
-};
-
-module.exports = { authRequest, validateUser };
+module.exports = { authRequest };

@@ -3,7 +3,7 @@ const friendService = require('../services/friendService');
 class FriendController {
   async getUserFriends(req, res, next) {
     try {
-      const { id } = req.user;
+      const id = req.user_id;
       const users = await friendService.getUserFriends(id);
       res.json({ success: true, data: users });
     } catch (error) {
@@ -13,7 +13,7 @@ class FriendController {
 
   async getPendingRequests(req, res, next) {
     try {
-      const { id } = req.user;
+      const id = req.user_id;
     //   const aptos_wallet = linked_accounts.find((wallet) => wallet.chain_type === "aptos")
       const requests = await friendService.getPendingRequests(id);
       
@@ -32,7 +32,7 @@ class FriendController {
 
   async cancelRequest(req, res, next) {
     try { 
-        const { id: caller_id } = req.user;
+        const caller_id = req.user_id;
         const { request_id } = req.body;
         await friendService.cancelRequestOrRemoveFriend(caller_id, request_id);
 
@@ -53,9 +53,9 @@ class FriendController {
 
   async acceptRequest(req, res, next) {
     try {
-        const { id } = req.user;
+        const id = req.user_id;
         const { request_id } = req.body;
-        const accept = await friendService.acceptRequest(id, request_id);
+        await friendService.acceptRequest(id, request_id);
         
         res.json({ 
           success: true, 
@@ -73,7 +73,7 @@ class FriendController {
   }
 
   async sendRequest(req, res, next) {
-    const { id } = req.user;
+    const id = req.user_id;
     const { to_user_id } = req.body;
     try {
     await friendService.sendFriendRequest(id, to_user_id);

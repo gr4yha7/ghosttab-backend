@@ -43,7 +43,6 @@ class UserService {
 
   async updateUser(id, username, country, avatar_url) {
     const privyClient = await getPrivyClient();
-    console.log("user_id", id)
 
     try {
         // Parse and verify the token

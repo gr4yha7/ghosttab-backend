@@ -1,5 +1,4 @@
 const supabase = require('../config/database');
-const { ethers } = require('ethers');
 
 let privy = null;
 
@@ -102,15 +101,6 @@ class FriendService {
   }
 
   async sendFriendRequest(id, to_user_id) {
-    const privyClient = await getPrivyClient();
-    let user;
-
-
-    try {
-     user = await privyClient.users()._get(to_user_id);
-    } catch (error) {
-        throw new Error(error);
-    }
 
     const { data: isExistData, error:isExistError } = await supabase
     .from('friend_requests')
