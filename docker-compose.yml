@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  auth-service:
+    build:
+      context: .
+      dockerfile: packages/auth-service/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    env_file:
+      - .env
+    volumes:
+      - ./packages/auth-service:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - ghosttab
+
+  user-service:
+    build:
+      context: .
+      dockerfile: packages/user-service/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+    env_file:
+      - .env
+    volumes:
+      - ./packages/user-service:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - ghosttab
+
+  tab-service:
+    build:
+      context: .
+      dockerfile: packages/tab-service/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+    env_file:
+      - .env
+    volumes:
+      - ./packages/tab-service:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - ghosttab
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: packages/notification-service/Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+    env_file:
+      - .env
+    volumes:
+      - ./packages/notification-service:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - ghosttab
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: packages/chat-service/Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+    env_file:
+      - .env
+    volumes:
+      - ./packages/chat-service:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - ghosttab
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ghosttab
+
+volumes:
+  redis-data:
+
+networks:
+  ghosttab:
+    driver: bridge
