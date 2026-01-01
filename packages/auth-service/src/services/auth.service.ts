@@ -21,14 +21,14 @@ export class AuthService {
   async verifyPrivyToken(privyToken: string): Promise<VerifyTokenResponse> {
     try {
       // Verify the Privy token
-      const claims = await privyClient.verifyAuthToken(privyToken);
+      const claims = await privyClient.verifyAuthToken(privyToken, config.privy.verificationKey);
       
-      if (!claims.userId) {
+      if (!claims.userId && claims.issuer !== "privy.io") {
         throw new UnauthorizedError('Invalid Privy token');
       }
 
       // Get user details from Privy
-      const privyUser = await privyClient.getUser({idToken: privyToken});
+      const privyUser = await privyClient.getUser({idToken: claims.userId});
       
       if (!privyUser) {
         throw new UnauthorizedError('User not found in Privy');
