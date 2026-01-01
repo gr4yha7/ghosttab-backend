@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 import winston from 'winston';
 
 const logLevel = process.env.LOG_LEVEL || 'info';
