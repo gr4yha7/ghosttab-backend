@@ -1,6 +1,6 @@
 // Config exports
 export { supabase, getSupabaseClient } from './config/supabase';
-export { redis, getRedisClient, getNotificationChannel, publishNotification } from './config/redis';
+export { getRedisClient, getNotificationChannel, publishNotification, subscribeToChannel } from './config/redis';
 export { logger } from './config/logger';
 
 // Type exports

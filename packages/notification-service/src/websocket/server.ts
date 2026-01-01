@@ -1,8 +1,9 @@
 import { Server as HTTPServer } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import * as jwt from 'jsonwebtoken';
-import { logger, redis, getNotificationChannel } from '@ghosttab/common';
+import { logger, getRedisClient, getNotificationChannel, subscribeToChannel } from '@ghosttab/common';
 import { config } from '../config';
+import type { RedisClientType } from 'redis';
 
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
@@ -12,7 +13,7 @@ interface AuthenticatedWebSocket extends WebSocket {
 export class NotificationWebSocketServer {
   private wss: WebSocketServer;
   private clients: Map<string, Set<AuthenticatedWebSocket>> = new Map();
-  private subscriptions: Map<string, any> = new Map();
+  private subscriptions: Map<string, RedisClientType> = new Map();
 
   constructor(server: HTTPServer) {
     this.wss = new WebSocketServer({ 
@@ -104,26 +105,21 @@ export class NotificationWebSocketServer {
     try {
       const channel = getNotificationChannel(userId);
 
-      // Subscribe to Redis channel
-      const subscription = redis.subscribe(channel);
+      // Subscribe to Redis channel with callback
+      const subscriber = await subscribeToChannel(channel, (message) => {
+        try {
+          const notification = JSON.parse(message);
+          this.broadcastToUser(userId, {
+            type: 'notification',
+            data: notification,
+          });
+        } catch (error) {
+          logger.error('Failed to parse notification', { userId, error });
+        }
+      });
 
       // Store subscription
-      this.subscriptions.set(userId, subscription);
-
-      // Listen for messages
-      (async () => {
-        for await (const message of subscription) {
-          try {
-            const notification = JSON.parse(message);
-            this.broadcastToUser(userId, {
-              type: 'notification',
-              data: notification,
-            });
-          } catch (error) {
-            logger.error('Failed to parse notification', { userId, error });
-          }
-        }
-      })();
+      this.subscriptions.set(userId, subscriber);
 
       logger.info('Subscribed to user notifications', { userId, channel });
     } catch (error) {
@@ -132,10 +128,12 @@ export class NotificationWebSocketServer {
   }
 
   private async unsubscribeFromUserNotifications(userId: string) {
-    const subscription = this.subscriptions.get(userId);
-    if (subscription) {
+    const subscriber = this.subscriptions.get(userId);
+    if (subscriber) {
       try {
-        await subscription.unsubscribe();
+        const channel = getNotificationChannel(userId);
+        await subscriber.unsubscribe(channel);
+        await subscriber.quit();
         this.subscriptions.delete(userId);
         logger.info('Unsubscribed from user notifications', { userId });
       } catch (error) {
