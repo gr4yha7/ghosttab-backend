@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest, sendSuccess, sendCreated } from '@ghosttab/common';
+import { AuthenticatedRequest, sendSuccess, sendCreated, FriendshipStatus } from '@ghosttab/common';
 import { userService } from '../services/user.service';
 
 export class UserController {
@@ -70,7 +70,7 @@ export class UserController {
       }
 
       const { status } = req.query;
-      const friends = await userService.getFriends(req.user.id, status as string);
+      const friends = await userService.getFriends(req.user.id, status as FriendshipStatus);
       
       return sendSuccess(res, { friends, total: friends.length });
     } catch (error) {

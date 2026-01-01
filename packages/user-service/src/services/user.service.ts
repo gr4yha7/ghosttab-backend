@@ -327,7 +327,7 @@ export class UserService {
       .single();
 
     // Notify the requester
-    await publishNotification(friendship.user_id, {
+    await publishNotification(friendship.user_id as string, {
       type: 'FRIEND_ACCEPTED',
       title: 'Friend Request Accepted',
       body: `${acceptor?.username || acceptor?.email} accepted your friend request`,

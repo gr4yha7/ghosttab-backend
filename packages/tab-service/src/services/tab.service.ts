@@ -481,7 +481,7 @@ export class TabService {
         .eq('tab_id', tabId);
 
       for (const p of participants || []) {
-        await publishNotification(p.user_id, {
+        await publishNotification(p.user_id as string, {
           type: 'TAB_SETTLED',
           title: 'Tab Settled',
           body: `"${tab.title}" has been fully settled!`,
@@ -584,7 +584,7 @@ export class TabService {
       .neq('user_id', userId);
 
     for (const p of participants || []) {
-      await publishNotification(p.user_id, {
+      await publishNotification(p.user_id as string, {
         type: 'TAB_UPDATED',
         title: 'Tab Cancelled',
         body: `"${tab.title}" has been cancelled`,
