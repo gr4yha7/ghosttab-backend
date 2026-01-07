@@ -23,6 +23,13 @@ router.use(authenticate);
 router.post('/', validate(createTabSchema), tabController.createTab);
 
 /**
+ * @route   POST /tabs/group/:groupId
+ * @desc    Create a new group tab
+ * @access  Private
+ */
+router.post('/group/:groupId', validate(createTabSchema), tabController.createGroupTab);
+
+/**
  * @route   GET /tabs
  * @desc    Get user's tabs
  * @access  Private

@@ -16,6 +16,20 @@ export class TabController {
     }
   }
 
+  async createGroupTab(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { groupId } = req.params;
+      const tab = await tabService.createGroupTab(req.user.id, groupId, req.body);
+      return sendCreated(res, { tab });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getTab(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       if (!req.user) {
