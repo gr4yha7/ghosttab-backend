@@ -22,6 +22,8 @@ export class UserService {
       throw new NotFoundError('User');
     }
 
+    const trustTier = this.getTrustTier(user.trust_score ?? 100);
+
     return {
       id: user.id,
       walletAddress: user.wallet_address,
@@ -31,6 +33,14 @@ export class UserService {
       avatarUrl: user.avatar_url,
       autoSettle: user.auto_settle,
       vaultAddress: user.vault_address,
+      trustScore: {
+        score: user.trust_score,
+        tier: trustTier.tier,
+        color: trustTier.color,
+        onTimeSettlements: user.settlements_on_time,
+        lateSettlements: user.settlements_late,
+        totalSettlements: user.total_settlements,
+      },
       createdAt: user.created_at,
     };
   }
@@ -154,7 +164,7 @@ export class UserService {
   async sendFriendRequest(
     fromUserId: string,
     toIdentifier: string
-  ): Promise<{ requiresOTP: boolean; friendRequestId?: string }> {
+  ): Promise<{ friendRequestId?: string }> {
     // Check if identifier is email or user ID
     const isEmail = toIdentifier.includes('@');
 
@@ -176,23 +186,25 @@ export class UserService {
           .eq('id', fromUserId)
           .single();
 
-        await otpService.createAndSendOTP(toIdentifier, 'FRIEND_REQUEST', {
-          fromUserId,
-          fromUsername: fromUser?.username || fromUser?.email,
-        });
+        // await otpService.createAndSendOTP(toIdentifier, 'FRIEND_REQUEST', {
+        //   fromUserId,
+        //   fromUsername: fromUser?.username || fromUser?.email,
+        // });
 
         // Also send a regular notification email
         await emailService.sendFriendRequestNotification(
           toIdentifier,
           fromUser?.username || fromUser?.email || 'Someone'
         );
-
-        return { requiresOTP: true };
+      } else {
+        toUserId = user.id;
       }
-
-      toUserId = user.id;
     } else {
       toUserId = toIdentifier;
+    }
+
+    if (!toUserId) {
+      throw new Error('Friend request recipient ID not provided');
     }
 
     // Check if friendship already exists
@@ -256,7 +268,6 @@ export class UserService {
     logger.info('Friend request sent', { fromUserId, toUserId });
 
     return {
-      requiresOTP: false,
       friendRequestId: friendship.id,
     };
   }
@@ -280,27 +291,27 @@ export class UserService {
     }
 
     // If OTP provided, verify it
-    if (otpCode) {
-      const { data: user } = await supabase
-        .from('users')
-        .select('email')
-        .eq('id', userId)
-        .single();
+    // if (otpCode) {
+    //   const { data: user } = await supabase
+    //     .from('users')
+    //     .select('email')
+    //     .eq('id', userId)
+    //     .single();
 
-      if (!user?.email) {
-        throw new ValidationError('Email required for OTP verification');
-      }
+    //   if (!user?.email) {
+    //     throw new ValidationError('Email required for OTP verification');
+    //   }
 
-      const verification = await otpService.verifyOTP(
-        user.email,
-        otpCode,
-        'FRIEND_ACCEPT'
-      );
+    //   const verification = await otpService.verifyOTP(
+    //     user.email,
+    //     otpCode,
+    //     'FRIEND_ACCEPT'
+    //   );
 
-      if (!verification.valid) {
-        throw new ValidationError('Invalid or expired OTP code');
-      }
-    }
+    //   if (!verification.valid) {
+    //     throw new ValidationError('Invalid or expired OTP code');
+    //   }
+    // }
 
     // Update friendship status
     const { error: updateError } = await supabase
@@ -410,6 +421,43 @@ export class UserService {
         avatarUrl: f.user.avatar_url,
       },
     }));
+  }
+
+  // Get trust score tier
+  private getTrustTier(score: number): {
+    tier: string;
+    color: string;
+    benefits: string[];
+  } {
+    if (score >= 120) {
+      return {
+        tier: 'Excellent',
+        color: '#10b981',
+        benefits: [
+          'Lower penalty rates',
+          'Priority support',
+          'Extended deadlines',
+        ],
+      };
+    } else if (score >= 100) {
+      return {
+        tier: 'Good',
+        color: '#3b82f6',
+        benefits: ['Standard rates', 'Normal deadlines'],
+      };
+    } else if (score >= 70) {
+      return {
+        tier: 'Fair',
+        color: '#f59e0b',
+        benefits: ['Standard rates', 'Payment reminders'],
+      };
+    } else {
+      return {
+        tier: 'Poor',
+        color: '#ef4444',
+        benefits: ['Higher penalty rates', 'Stricter deadlines'],
+      };
+    }
   }
 }
 
