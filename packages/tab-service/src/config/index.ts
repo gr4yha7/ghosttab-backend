@@ -6,10 +6,6 @@ export const config = {
   port: parseInt(process.env.TAB_SERVICE_PORT || '3003', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
-  jwt: {
-    secret: process.env.JWT_SECRET!,
-  },
-  
   cors: {
     origins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
   },
@@ -17,6 +13,15 @@ export const config = {
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+  },
+
+  resend: {
+    apiKey: process.env.RESEND_API_KEY!,
+  },
+  
+  otp: {
+    expiryMinutes: 10,
+    length: 6,
   },
   
   stream: {
@@ -32,11 +37,10 @@ export const config = {
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'JWT_SECRET',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_KEY',
-  'UPSTASH_REDIS_URL',
-  'UPSTASH_REDIS_TOKEN',
+  'REDIS_URL',
+  'RESEND_API_KEY',
   'STREAM_API_KEY',
   'STREAM_API_SECRET',
 ];
