@@ -9,7 +9,10 @@ export const config = {
   privy: {
     appId: process.env.PRIVY_APP_ID!,
     appSecret: process.env.PRIVY_APP_SECRET!,
-    verificationKey: process.env.PRIVY_VERIFICATION_KEY!,
+    verificationKey: process.env.PRIVY_VERIFICATION_KEY!.replace(
+      /\\n/g,
+      "\n"
+    ),
   },
   
   jwt: {

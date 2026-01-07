@@ -1,6 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest, UnauthorizedError } from '@ghosttab/common';
-import { verifyToken } from '../utils/jwt';
+import { AuthenticatedRequest, UnauthorizedError, verifyPrivyIdToken } from '@ghosttab/common';
 
 export const authenticate = async (
   req: AuthenticatedRequest,
@@ -16,14 +15,11 @@ export const authenticate = async (
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    const payload = verifyToken(token);
-
+    const payload = await verifyPrivyIdToken(token)
     // Attach user info to request
     req.user = {
       id: payload.userId,
-      privyId: payload.privyId,
-      walletAddress: payload.walletAddress,
-      email: payload.email,
+      ...payload,
     };
 
     next();

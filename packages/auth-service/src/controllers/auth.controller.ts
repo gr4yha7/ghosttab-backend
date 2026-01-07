@@ -19,17 +19,17 @@ export class AuthController {
     }
   }
 
-  async refresh(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { token } = req.body;
+  // async refresh(req: Request, res: Response, next: NextFunction) {
+  //   try {
+  //     const { token } = req.body;
 
-      const result = await authService.refreshToken(token);
+  //     const result = await authService.refreshToken(token);
 
-      return sendSuccess(res, result);
-    } catch (error) {
-      next(error);
-    }
-  }
+  //     return sendSuccess(res, result);
+  //   } catch (error) {
+  //     next(error);
+  //   }
+  // }
 
   async me(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {

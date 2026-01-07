@@ -1,13 +1,5 @@
-import { PrivyClient } from '@privy-io/server-auth';
-import { supabase, logger, UnauthorizedError, InternalServerError } from '@ghosttab/common';
-import { config } from '../config';
-import { generateToken, JwtPayload } from '../utils/jwt';
+import { supabase, logger, UnauthorizedError, InternalServerError, privyClient } from '@ghosttab/common';
 import { generateStreamToken, upsertStreamUser } from './stream.service';
-
-const privyClient = new PrivyClient(
-  config.privy.appId,
-  config.privy.appSecret
-);
 
 interface VerifyTokenResponse {
   userId: string;
@@ -18,17 +10,10 @@ interface VerifyTokenResponse {
 }
 
 export class AuthService {
-  async verifyPrivyToken(privyToken: string): Promise<VerifyTokenResponse> {
+  async verifyPrivyIdTokenAndGetUser(privyIdToken: string): Promise<VerifyTokenResponse> {
     try {
-      // Verify the Privy token
-      const claims = await privyClient.verifyAuthToken(privyToken, config.privy.verificationKey);
-      
-      if (!claims.userId && claims.issuer !== "privy.io") {
-        throw new UnauthorizedError('Invalid Privy token');
-      }
-
       // Get user details from Privy
-      const privyUser = await privyClient.getUser({idToken: claims.userId});
+      const privyUser = await privyClient.getUser({idToken: privyIdToken});
       
       if (!privyUser) {
         throw new UnauthorizedError('User not found in Privy');
@@ -41,13 +26,14 @@ export class AuthService {
       }
 
       const walletAddress = wallet.address;
+      const privyUserId = privyUser.id
       const email = privyUser.email?.address;
 
       // Check if user exists in our database
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('privy_id', claims.userId)
+        .eq('privy_id', privyUserId)
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
@@ -65,7 +51,7 @@ export class AuthService {
         const { data: newUser, error: createError } = await supabase
           .from('users')
           .insert({
-            privy_id: claims.userId,
+            id: privyUserId,
             wallet_address: walletAddress,
             email: email || null,
             username: email?.split('@')[0] || null,
@@ -83,7 +69,7 @@ export class AuthService {
         // Create Stream Chat user
         await upsertStreamUser(userId, {
           name: newUser.username || email || userId,
-          image: newUser.avatar_url || undefined,
+          image: newUser.avatar_url || undefined, 
         });
 
         // Generate and store Stream token
@@ -94,7 +80,7 @@ export class AuthService {
           .update({ stream_token: streamToken })
           .eq('id', userId);
 
-        logger.info('New user created', { userId, privyId: claims.userId });
+        logger.info('New user created', { userId, privyId: privyUserId });
       } else {
         userId = existingUser.id;
 
@@ -125,7 +111,7 @@ export class AuthService {
 
       return {
         userId,
-        privyId: claims.userId,
+        privyId: privyUserId,
         walletAddress,
         email,
         isNewUser,
@@ -140,23 +126,13 @@ export class AuthService {
   }
 
   async login(privyToken: string): Promise<{
-    token: string;
+    // token: string;
     user: any;
     streamToken: string;
     isNewUser: boolean;
   }> {
-    const { userId, privyId, walletAddress, email, isNewUser } = 
-      await this.verifyPrivyToken(privyToken);
-
-    // Generate our JWT
-    const jwtPayload: JwtPayload = {
-      userId,
-      privyId,
-      walletAddress,
-      email,
-    };
-
-    const token = generateToken(jwtPayload);
+    const { userId, isNewUser } = 
+      await this.verifyPrivyIdTokenAndGetUser(privyToken);
 
     // Get full user data
     const { data: user, error } = await supabase
@@ -180,10 +156,9 @@ export class AuthService {
     }
 
     return {
-      token,
+      // token,
       user: {
         id: user.id,
-        privyId: user.privy_id,
         walletAddress: user.wallet_address,
         username: user.username,
         email: user.email,
@@ -196,36 +171,6 @@ export class AuthService {
     };
   }
 
-  async refreshToken(oldToken: string): Promise<{ token: string }> {
-    try {
-      const { verifyToken } = await import('../utils/jwt');
-      const payload = verifyToken(oldToken);
-
-      // Verify user still exists
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('id, privy_id, wallet_address, email')
-        .eq('id', payload.userId)
-        .single();
-
-      if (error || !user) {
-        throw new UnauthorizedError('User not found');
-      }
-
-      // Generate new token
-      const newToken = generateToken({
-        userId: user.id,
-        privyId: user.privy_id,
-        walletAddress: user.wallet_address,
-        email: user.email || undefined,
-      });
-
-      return { token: newToken };
-    } catch (error) {
-      logger.error('Error refreshing token', { error });
-      throw new UnauthorizedError('Invalid token');
-    }
-  }
 
   async getCurrentUser(userId: string): Promise<any> {
     const { data: user, error } = await supabase
@@ -240,7 +185,6 @@ export class AuthService {
 
     return {
       id: user.id,
-      privyId: user.privy_id,
       walletAddress: user.wallet_address,
       username: user.username,
       email: user.email,

@@ -18,7 +18,7 @@ router.post('/login', validate(loginSchema), authController.login);
  * @desc    Refresh JWT token
  * @access  Public
  */
-router.post('/refresh', validate(refreshTokenSchema), authController.refresh);
+// router.post('/refresh', validate(refreshTokenSchema), authController.refresh);
 
 /**
  * @route   GET /auth/me

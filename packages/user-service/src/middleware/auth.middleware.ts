@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
-import { AuthenticatedRequest, UnauthorizedError } from '@ghosttab/common';
+import { AuthenticatedRequest, UnauthorizedError, verifyPrivyIdToken } from '@ghosttab/common';
 import { config } from '../config';
 
 export const authenticate = async (
@@ -17,13 +17,11 @@ export const authenticate = async (
 
     const token = authHeader.substring(7);
 
-    const payload = jwt.verify(token, config.jwt.secret) as any;
-
+    const payload = await verifyPrivyIdToken(token)
+    // Attach user info to request
     req.user = {
       id: payload.userId,
-      privyId: payload.privyId,
-      walletAddress: payload.walletAddress,
-      email: payload.email,
+      ...payload,
     };
 
     next();

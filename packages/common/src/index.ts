@@ -2,6 +2,8 @@
 export { supabase, getSupabaseClient } from './config/supabase';
 export { getRedisClient, getNotificationChannel, publishNotification, subscribeToChannel } from './config/redis';
 export { logger } from './config/logger';
+export { privyClient, getPrivyUser } from './config/privy';
+export { verifyToken as verifyPrivyIdToken } from './config/jwt';
 
 // Type exports
 export type { Database } from './types/database.types';
@@ -9,7 +11,9 @@ export type {
   NotificationType,
   FriendshipStatus,
   TabStatus,
+  TabCategory,
   TransactionType,
+  GroupRole,
 } from './types/states.types';
 export type {
   AuthenticatedRequest,

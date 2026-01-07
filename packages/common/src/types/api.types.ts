@@ -3,7 +3,6 @@ import { Request } from 'express';
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
-    privyId: string;
     walletAddress: string;
     email?: string;
   };

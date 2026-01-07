@@ -1,7 +1,6 @@
 import { Server as HTTPServer } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
-import * as jwt from 'jsonwebtoken';
-import { logger, getRedisClient, getNotificationChannel, subscribeToChannel } from '@ghosttab/common';
+import { logger, getRedisClient, getNotificationChannel, subscribeToChannel, verifyPrivyIdToken } from '@ghosttab/common';
 import { config } from '../config';
 import type { RedisClientType } from 'redis';
 
@@ -39,7 +38,7 @@ export class NotificationWebSocketServer {
         }
 
         // Verify JWT
-        const payload = jwt.verify(token, config.jwt.secret) as any;
+        const payload = await verifyPrivyIdToken(token)
         const userId = payload.userId;
 
         if (!userId) {
