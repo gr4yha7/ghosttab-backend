@@ -6,10 +6,6 @@ export const config = {
   port: parseInt(process.env.USER_SERVICE_PORT || '3002', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
-  jwt: {
-    secret: process.env.JWT_SECRET!,
-  },
-  
   cors: {
     origins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
   },
@@ -26,6 +22,11 @@ export const config = {
   otp: {
     expiryMinutes: 10,
     length: 6,
+  },
+
+  stream: {
+    apiKey: process.env.STREAM_API_KEY!,
+    apiSecret: process.env.STREAM_API_SECRET!,
   },
 };
 

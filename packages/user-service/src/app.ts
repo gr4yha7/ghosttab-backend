@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { errorHandler, notFoundHandler } from '@ghosttab/common';
 import { config } from './config';
 import userRoutes from './routes/user.routes';
+import groupRoutes from './routes/group.routes';
 
 export const createApp = (): Application => {
   const app = express();
@@ -36,6 +37,7 @@ export const createApp = (): Application => {
 
   // Routes
   app.use('/users', userRoutes);
+  app.use('/users/groups', groupRoutes);
 
   // Root health check
   app.get('/', (req: Request, res: Response) => {
