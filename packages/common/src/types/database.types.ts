@@ -42,27 +42,27 @@ export type Database = {
       friendships: {
         Row: {
           created_at: string | null
-          friend_id: string | null
+          friend_id: string
           id: string
           status: Database["public"]["Enums"]["friendship_status"] | null
           updated_at: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string | null
-          friend_id?: string | null
+          friend_id: string
           id?: string
           status?: Database["public"]["Enums"]["friendship_status"] | null
           updated_at?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string | null
-          friend_id?: string | null
+          friend_id?: string
           id?: string
           status?: Database["public"]["Enums"]["friendship_status"] | null
           updated_at?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -81,6 +81,45 @@ export type Database = {
           },
         ]
       }
+      group_members: {
+        Row: {
+          group_id: string
+          id: string
+          joined_at: string | null
+          role: Database["public"]["Enums"]["group_role"]
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          joined_at?: string | null
+          role?: Database["public"]["Enums"]["group_role"]
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          joined_at?: string | null
+          role?: Database["public"]["Enums"]["group_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "user_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string
@@ -90,7 +129,7 @@ export type Database = {
           read: boolean | null
           title: string
           type: Database["public"]["Enums"]["notification_type"]
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           body: string
@@ -100,7 +139,7 @@ export type Database = {
           read?: boolean | null
           title: string
           type: Database["public"]["Enums"]["notification_type"]
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           body?: string
@@ -110,7 +149,7 @@ export type Database = {
           read?: boolean | null
           title?: string
           type?: Database["public"]["Enums"]["notification_type"]
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -155,42 +194,114 @@ export type Database = {
         }
         Relationships: []
       }
+      settlement_history: {
+        Row: {
+          created_at: string | null
+          days_late: number | null
+          id: string
+          penalty_amount: number | null
+          settled_on_time: boolean
+          tab_id: string | null
+          trust_score_after: number | null
+          trust_score_before: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          days_late?: number | null
+          id?: string
+          penalty_amount?: number | null
+          settled_on_time: boolean
+          tab_id?: string | null
+          trust_score_after?: number | null
+          trust_score_before?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          days_late?: number | null
+          id?: string
+          penalty_amount?: number | null
+          settled_on_time?: boolean
+          tab_id?: string | null
+          trust_score_after?: number | null
+          trust_score_before?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settlement_history_tab_id_fkey"
+            columns: ["tab_id"]
+            isOneToOne: false
+            referencedRelation: "tabs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_participants: {
         Row: {
           created_at: string | null
+          days_late: number | null
+          final_amount: number | null
           id: string
+          otp_sent_at: string | null
           paid: boolean | null
           paid_amount: number | null
           paid_at: string | null
           paid_tx_hash: string | null
+          penalty_amount: number | null
+          settled_early: boolean | null
           share_amount: number
           tab_id: string | null
           updated_at: string | null
-          user_id: string | null
+          user_id: string
+          verification_deadline: string | null
+          verified: boolean | null
         }
         Insert: {
           created_at?: string | null
+          days_late?: number | null
+          final_amount?: number | null
           id?: string
+          otp_sent_at?: string | null
           paid?: boolean | null
           paid_amount?: number | null
           paid_at?: string | null
           paid_tx_hash?: string | null
+          penalty_amount?: number | null
+          settled_early?: boolean | null
           share_amount: number
           tab_id?: string | null
           updated_at?: string | null
-          user_id?: string | null
+          user_id: string
+          verification_deadline?: string | null
+          verified?: boolean | null
         }
         Update: {
           created_at?: string | null
+          days_late?: number | null
+          final_amount?: number | null
           id?: string
+          otp_sent_at?: string | null
           paid?: boolean | null
           paid_amount?: number | null
           paid_at?: string | null
           paid_tx_hash?: string | null
+          penalty_amount?: number | null
+          settled_early?: boolean | null
           share_amount?: number
           tab_id?: string | null
           updated_at?: string | null
-          user_id?: string | null
+          user_id?: string
+          verification_deadline?: string | null
+          verified?: boolean | null
         }
         Relationships: [
           {
@@ -211,12 +322,16 @@ export type Database = {
       }
       tabs: {
         Row: {
+          auto_settle_enabled: boolean | null
+          category: Database["public"]["Enums"]["tab_category"] | null
           created_at: string | null
-          creator_id: string | null
+          creator_id: string
           currency: string | null
           description: string | null
-          icon: string | null
+          group_id: string | null
           id: string
+          penalty_rate: number | null
+          settlement_deadline: string | null
           status: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id: string | null
           title: string
@@ -224,12 +339,16 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          auto_settle_enabled?: boolean | null
+          category?: Database["public"]["Enums"]["tab_category"] | null
           created_at?: string | null
-          creator_id?: string | null
+          creator_id: string
           currency?: string | null
           description?: string | null
-          icon?: string | null
+          group_id?: string | null
           id?: string
+          penalty_rate?: number | null
+          settlement_deadline?: string | null
           status?: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id?: string | null
           title: string
@@ -237,12 +356,16 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          auto_settle_enabled?: boolean | null
+          category?: Database["public"]["Enums"]["tab_category"] | null
           created_at?: string | null
-          creator_id?: string | null
+          creator_id?: string
           currency?: string | null
           description?: string | null
-          icon?: string | null
+          group_id?: string | null
           id?: string
+          penalty_rate?: number | null
+          settlement_deadline?: string | null
           status?: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id?: string | null
           title?: string
@@ -255,6 +378,13 @@ export type Database = {
             columns: ["creator_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tabs_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "user_groups"
             referencedColumns: ["id"]
           },
         ]
@@ -320,16 +450,61 @@ export type Database = {
           },
         ]
       }
+      user_groups: {
+        Row: {
+          created_at: string | null
+          creator_id: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          stream_channel_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          creator_id: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          stream_channel_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          creator_id?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          stream_channel_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_groups_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auto_settle: boolean | null
           avatar_url: string | null
+          avg_settlement_days: number | null
           created_at: string | null
           email: string | null
           id: string
           phone: string | null
-          privy_id: string
+          settlements_late: number | null
+          settlements_on_time: number | null
           stream_token: string | null
+          total_settlements: number | null
+          trust_score: number | null
           updated_at: string | null
           username: string | null
           vault_address: string | null
@@ -338,12 +513,16 @@ export type Database = {
         Insert: {
           auto_settle?: boolean | null
           avatar_url?: string | null
+          avg_settlement_days?: number | null
           created_at?: string | null
           email?: string | null
-          id?: string
+          id: string
           phone?: string | null
-          privy_id: string
+          settlements_late?: number | null
+          settlements_on_time?: number | null
           stream_token?: string | null
+          total_settlements?: number | null
+          trust_score?: number | null
           updated_at?: string | null
           username?: string | null
           vault_address?: string | null
@@ -352,12 +531,16 @@ export type Database = {
         Update: {
           auto_settle?: boolean | null
           avatar_url?: string | null
+          avg_settlement_days?: number | null
           created_at?: string | null
           email?: string | null
           id?: string
           phone?: string | null
-          privy_id?: string
+          settlements_late?: number | null
+          settlements_on_time?: number | null
           stream_token?: string | null
+          total_settlements?: number | null
+          trust_score?: number | null
           updated_at?: string | null
           username?: string | null
           vault_address?: string | null
@@ -374,6 +557,7 @@ export type Database = {
     }
     Enums: {
       friendship_status: "PENDING" | "ACCEPTED" | "BLOCKED"
+      group_role: "CREATOR" | "ADMIN" | "MEMBER"
       notification_type:
         | "FRIEND_REQUEST"
         | "FRIEND_ACCEPTED"
@@ -383,6 +567,22 @@ export type Database = {
         | "PAYMENT_REMINDER"
         | "TAB_SETTLED"
         | "MESSAGE_RECEIVED"
+        | "TAB_PARTICIPATION"
+        | "GROUP_CREATED"
+        | "GROUP_MEMBER_ADDED"
+        | "GROUP_MEMBER_REMOVED"
+        | "GROUP_ROLE_UPDATED"
+        | "GROUP_TAB_CREATED"
+      tab_category:
+        | "DINING"
+        | "TRAVEL"
+        | "GROCERIES"
+        | "ENTERTAINMENT"
+        | "UTILITIES"
+        | "GIFTS"
+        | "TRANSPORTATION"
+        | "ACCOMMODATION"
+        | "OTHER"
       tab_status: "OPEN" | "SETTLED" | "CANCELLED"
       transaction_type:
         | "PAYMENT"
@@ -520,6 +720,7 @@ export const Constants = {
   public: {
     Enums: {
       friendship_status: ["PENDING", "ACCEPTED", "BLOCKED"],
+      group_role: ["CREATOR", "ADMIN", "MEMBER"],
       notification_type: [
         "FRIEND_REQUEST",
         "FRIEND_ACCEPTED",
@@ -529,6 +730,23 @@ export const Constants = {
         "PAYMENT_REMINDER",
         "TAB_SETTLED",
         "MESSAGE_RECEIVED",
+        "TAB_PARTICIPATION",
+        "GROUP_CREATED",
+        "GROUP_MEMBER_ADDED",
+        "GROUP_MEMBER_REMOVED",
+        "GROUP_ROLE_UPDATED",
+        "GROUP_TAB_CREATED",
+      ],
+      tab_category: [
+        "DINING",
+        "TRAVEL",
+        "GROCERIES",
+        "ENTERTAINMENT",
+        "UTILITIES",
+        "GIFTS",
+        "TRANSPORTATION",
+        "ACCOMMODATION",
+        "OTHER",
       ],
       tab_status: ["OPEN", "SETTLED", "CANCELLED"],
       transaction_type: [

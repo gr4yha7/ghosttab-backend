@@ -1,13 +1,9 @@
-export type NotificationType = 
-  'FRIEND_REQUEST' |
-  'FRIEND_ACCEPTED' |
-  'TAB_CREATED' |
-  'TAB_UPDATED' |
-  'PAYMENT_RECEIVED' |
-  'PAYMENT_REMINDER' |
-  'TAB_SETTLED' |
-  'MESSAGE_RECEIVED'
+import { Database } from "./database.types"
 
-export type FriendshipStatus = "PENDING" | "ACCEPTED" | "BLOCKED"
-export type TabStatus = "OPEN" | "SETTLED" | "CANCELLED"
-export type TransactionType = "PAYMENT" | "SETTLEMENT" | "VAULT_DEPOSIT" | "VAULT_WITHDRAWAL"
+export type NotificationType = Database["public"]["Enums"]["notification_type"]
+
+export type FriendshipStatus = Database["public"]["Enums"]["friendship_status"]
+export type TabStatus = Database["public"]["Enums"]["tab_status"]
+export type TabCategory = Database["public"]["Enums"]["tab_category"]
+export type TransactionType = Database["public"]["Enums"]["transaction_type"]
+export type GroupRole = Database["public"]["Enums"]["group_role"]
