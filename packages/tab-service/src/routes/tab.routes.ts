@@ -8,6 +8,7 @@ import {
   settlePaymentSchema,
   tabIdParamSchema,
   getUserTabsSchema,
+  createGroupTabSchema,
 } from '../validators/tab.validators';
 
 const router = Router();
@@ -27,7 +28,7 @@ router.post('/', validate(createTabSchema), tabController.createTab);
  * @desc    Create a new group tab
  * @access  Private
  */
-router.post('/group/:groupId', validate(createTabSchema), tabController.createGroupTab);
+router.post('/group/:groupId', validate(createGroupTabSchema), tabController.createGroupTab);
 
 /**
  * @route   GET /tabs
