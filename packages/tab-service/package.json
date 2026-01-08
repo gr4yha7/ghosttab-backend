@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@ghosttab/common": "*",
+    "@aptos-labs/ts-sdk": "^5.2.0",
+    "@shinami/clients": "^0.9.8",
     "express": "^5.2.1",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
