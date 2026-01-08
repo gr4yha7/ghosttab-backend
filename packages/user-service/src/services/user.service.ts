@@ -3,11 +3,11 @@ import {
   logger,
   NotFoundError,
   ConflictError,
-  ValidationError,
+  // ValidationError,
   publishNotification,
   FriendshipStatus,
 } from '@ghosttab/common';
-import { otpService } from './otp.service';
+// import { otpService } from './otp.service';
 import { emailService } from './email.service';
 
 export class UserService {
@@ -98,7 +98,7 @@ export class UserService {
   async searchUsers(query: string, currentUserId: string): Promise<any[]> {
     const { data: users, error } = await supabase
       .from('users')
-      .select('id, username, email, wallet_address, avatar_url')
+      .select('id, username, email, wallet_address, avatar_url, trust_score')
       .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
       .neq('id', currentUserId)
       .limit(20);
@@ -108,12 +108,13 @@ export class UserService {
       return [];
     }
 
-    return (users || []).map((user) => ({
+    return (users || []).map((user: any) => ({
       id: user.id,
       username: user.username,
       email: user.email,
       walletAddress: user.wallet_address,
       avatarUrl: user.avatar_url,
+      trustScore: user.trust_score,
     }));
   }
 
