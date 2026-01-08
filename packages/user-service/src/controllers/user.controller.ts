@@ -100,13 +100,6 @@ export class UserController {
 
       const { toIdentifier } = req.body;
       const result = await userService.sendFriendRequest(req.user.id, toIdentifier);
-      
-      if (result.requiresOTP) {
-        return sendSuccess(res, {
-          message: 'Verification code sent to email',
-          requiresOTP: true,
-        });
-      }
 
       return sendCreated(res, {
         message: 'Friend request sent',
@@ -123,10 +116,8 @@ export class UserController {
         throw new Error('User not authenticated');
       }
 
-      const { friendshipId } = req.params;
-      const { otpCode } = req.body;
-      
-      await userService.acceptFriendRequest(req.user.id, friendshipId, otpCode);
+      const { friendshipId } = req.params;      
+      await userService.acceptFriendRequest(req.user.id, friendshipId);
       
       return sendSuccess(res, { message: 'Friend request accepted' });
     } catch (error) {
