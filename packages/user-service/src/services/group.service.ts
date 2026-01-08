@@ -43,7 +43,7 @@ export class GroupService {
         .eq('status', 'ACCEPTED')
         .in('friend_id', initialMembers);
       
-      const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
+      const friendIds = new Set(friendships?.map((f: { friend_id: string }) => f.friend_id) || []);
       const nonFriends = initialMembers.filter(id => !friendIds.has(id));
       
       if (nonFriends.length > 0) {
@@ -334,7 +334,7 @@ export class GroupService {
       .eq('status', 'ACCEPTED')
       .in('friend_id', memberIds);
     
-    const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
+    const friendIds = new Set(friendships?.map((f: { friend_id: string }) => f.friend_id) || []);
     const nonFriends = memberIds.filter(id => !friendIds.has(id));
     
     if (nonFriends.length > 0) {
@@ -348,7 +348,7 @@ export class GroupService {
       .eq('group_id', groupId)
       .in('user_id', memberIds);
     
-    const existingIds = new Set(existing?.map(m => m.user_id) || []);
+    const existingIds = new Set(existing?.map((m: { user_id: string }) => m.user_id) || []);
     const newMemberIds = memberIds.filter(id => !existingIds.has(id));
     
     if (newMemberIds.length === 0) {
