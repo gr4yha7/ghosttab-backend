@@ -105,7 +105,7 @@ export class NotificationWebSocketServer {
       const channel = getNotificationChannel(userId);
 
       // Subscribe to Redis channel with callback
-      const subscriber = await subscribeToChannel(channel, (message) => {
+      const subscriber = await subscribeToChannel(channel, (message: string) => {
         try {
           const notification = JSON.parse(message);
           this.broadcastToUser(userId, {
