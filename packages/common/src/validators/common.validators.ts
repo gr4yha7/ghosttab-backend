@@ -6,7 +6,7 @@ export const uuidSchema = z.string().uuid('Invalid UUID format');
 
 export const walletAddressSchema = z
   .string()
-  .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid wallet address');
+  .regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid wallet address');
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
