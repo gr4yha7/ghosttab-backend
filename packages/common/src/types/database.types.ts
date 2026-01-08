@@ -332,6 +332,7 @@ export type Database = {
           id: string
           penalty_rate: number | null
           settlement_deadline: string | null
+          settlement_wallet: string
           status: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id: string | null
           title: string
@@ -349,6 +350,7 @@ export type Database = {
           id?: string
           penalty_rate?: number | null
           settlement_deadline?: string | null
+          settlement_wallet: string
           status?: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id?: string | null
           title: string
@@ -366,6 +368,7 @@ export type Database = {
           id?: string
           penalty_rate?: number | null
           settlement_deadline?: string | null
+          settlement_wallet?: string
           status?: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id?: string | null
           title?: string
