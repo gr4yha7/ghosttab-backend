@@ -33,6 +33,10 @@ export const config = {
     rpcUrl: process.env.MOVEMENT_RPC_URL!,
     chainId: process.env.MOVEMENT_CHAIN_ID!,
   },
+
+  shinami: {
+    gasStationAccessKey: process.env.GAS_STATION_ACCESS_KEY!,
+  }
 };
 
 // Validate required environment variables
