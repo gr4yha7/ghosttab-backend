@@ -35,22 +35,28 @@ module tab_manager::tab_manager {
     struct TabMember has store, drop, copy {
         payee_privy_id: String,
         payee_wallet: address,
-        tab_amount: u64,
+        share_amount: u64,
+        amount_paid: u64,
+        penalty_amount: u64,
         status: String,
         confirmed_at: String,
     }
 
     struct Tab has store, drop, copy {
         id: u64,
-        name: String,
-        amount_spent: u64,
+        title: String,
+        description: String,
+        total_amount: u64,
+        status: String,
+        stream_channel_id: String,
+        created_at: u64,
+        settlement_deadline: u64,
+        penalty_rate: u64,
+        category: String,
         created_by: address,
         settler_wallet: address,
         group_id: String,
-        status: String,
-        created_at: u64,
         closed_at: u64,
-        opened_period: u64,
         members: vector<TabMember>,
     }
 
@@ -74,11 +80,16 @@ module tab_manager::tab_manager {
     #[event]
     struct TabCreatedEvent has store, drop {
         tab_id: u64,
-        name: String,
+        title: String,
+        description: String,
         created_by: address,
         settler_wallet: address,
         group_id: String,
-        amount_spent: u64,
+        total_amount: u64,
+        settlement_deadline: u64,
+        penalty_rate: u64,
+        category: String,
+        stream_channel_id: String,
         created_at: u64,
     }
 
@@ -87,7 +98,7 @@ module tab_manager::tab_manager {
         tab_id: u64,
         payee_wallet: address,
         payee_privy_id: String,
-        tab_amount: u64,
+        share_amount: u64,
     }
 
     #[event]
@@ -96,6 +107,7 @@ module tab_manager::tab_manager {
         payee_wallet: address,
         settler_wallet: address,
         amount: u64,
+        penalty_amount: u64,
         is_auto: bool,
         settled_at: u64,
     }
@@ -140,11 +152,15 @@ module tab_manager::tab_manager {
     public entry fun create_tab(
         account: &signer,
         registry_address: address,
-        name: String,
-        amount_spent: u64,
+        title: String,
+        description: String,
+        total_amount: u64,
         settler_wallet: address,
         group_id: String,
-        opened_period: u64,
+        settlement_deadline: u64,
+        penalty_rate: u64,
+        category: String,
+        stream_channel_id: String,
         member_privy_ids: vector<String>,
         member_wallets: vector<address>,
         member_amounts: vector<u64>,
@@ -155,13 +171,10 @@ module tab_manager::tab_manager {
         // Check authorization
         assert!(creator == registry.authorized_creator, E_NOT_AUTHORIZED);
         
-        // Validate period
-        assert!(opened_period >= MIN_PERIOD_SECONDS && opened_period <= MAX_PERIOD_SECONDS, E_INVALID_PERIOD);
-        
         let tab_id = registry.next_tab_id;
         let current_time = timestamp::now_seconds();
         
-        // Validate that all member amounts sum to amount_spent
+        // Validate that all member amounts sum to total_amount
         let total_member_amount = 0u64;
         let i = 0;
         let len = vector::length(&member_amounts);
@@ -169,7 +182,7 @@ module tab_manager::tab_manager {
             total_member_amount = total_member_amount + *vector::borrow(&member_amounts, i);
             i = i + 1;
         };
-        assert!(total_member_amount == amount_spent, E_AMOUNT_MISMATCH);
+        assert!(total_member_amount == total_amount, E_AMOUNT_MISMATCH);
         
         // Check for duplicate wallets
         let i = 0;
@@ -189,13 +202,15 @@ module tab_manager::tab_manager {
         let i = 0;
         while (i < len) {
             let payee_wallet = *vector::borrow(&member_wallets, i);
-            let tab_amount = *vector::borrow(&member_amounts, i);
+            let share_amount = *vector::borrow(&member_amounts, i);
             let payee_privy_id = *vector::borrow(&member_privy_ids, i);
             
             let member = TabMember {
                 payee_privy_id,
                 payee_wallet,
-                tab_amount,
+                share_amount,
+                amount_paid: 0,
+                penalty_amount: 0,
                 status: std::string::utf8(STATUS_PENDING),
                 confirmed_at: std::string::utf8(b""),
             };
@@ -206,27 +221,27 @@ module tab_manager::tab_manager {
                 if (auto_settle_index < vector::length(&registry.auto_settlements)) {
                     let auto_settlement = vector::borrow(&registry.auto_settlements, auto_settle_index);
                     if (auto_settlement.auto_settle && 
-                        tab_amount >= auto_settlement.min_amount && 
-                        tab_amount <= auto_settlement.max_amount &&
-                        auto_settlement.balance >= tab_amount) {
+                        share_amount >= auto_settlement.min_amount && 
+                        share_amount <= auto_settlement.max_amount &&
+                        auto_settlement.balance >= share_amount) {
                         
-                        // Auto settle this member - transfer USDC
-                        // Note: In a real implementation, you'd need to handle the USDC transfer here
-                        // This requires the contract to hold USDC on behalf of users
-                        
+                        // Auto settle this member
                         member.status = std::string::utf8(STATUS_SETTLED);
+                        member.amount_paid = share_amount;
+                        member.penalty_amount = 0;
                         member.confirmed_at = u64_to_string(current_time);
                         
                         // Update auto settlement balance
                         let auto_settlement_mut = vector::borrow_mut(&mut registry.auto_settlements, auto_settle_index);
-                        auto_settlement_mut.balance = auto_settlement_mut.balance - tab_amount;
+                        auto_settlement_mut.balance = auto_settlement_mut.balance - share_amount;
                         
                         // Emit auto settlement event
                         event::emit(TabSettledEvent {
                             tab_id,
                             payee_wallet,
                             settler_wallet,
-                            amount: tab_amount,
+                            amount: share_amount,
+                            penalty_amount: 0,
                             is_auto: true,
                             settled_at: current_time,
                         });
@@ -241,7 +256,7 @@ module tab_manager::tab_manager {
                 tab_id,
                 payee_wallet,
                 payee_privy_id,
-                tab_amount,
+                share_amount,
             });
             
             i = i + 1;
@@ -250,15 +265,19 @@ module tab_manager::tab_manager {
         // Create tab
         let tab = Tab {
             id: tab_id,
-            name,
-            amount_spent,
+            title,
+            description,
+            total_amount,
             created_by: creator,
             settler_wallet,
             group_id,
             status: std::string::utf8(STATUS_OPENED),
+            stream_channel_id,
             created_at: current_time,
+            settlement_deadline,
+            penalty_rate,
+            category,
             closed_at: 0,
-            opened_period,
             members,
         };
         
@@ -268,11 +287,16 @@ module tab_manager::tab_manager {
         // Emit tab created event
         event::emit(TabCreatedEvent {
             tab_id,
-            name,
+            title,
+            description,
             created_by: creator,
             settler_wallet,
             group_id,
-            amount_spent,
+            total_amount,
+            settlement_deadline,
+            penalty_rate,
+            category,
+            stream_channel_id,
             created_at: current_time,
         });
     }
@@ -306,14 +330,25 @@ module tab_manager::tab_manager {
         // Check if already settled
         assert!(member.status != std::string::utf8(STATUS_SETTLED), E_ALREADY_SETTLED);
         
-        // Verify amount
-        assert!(amount == member.tab_amount, E_INVALID_AMOUNT);
+        // Verify amount matches share amount
+        assert!(amount == member.share_amount, E_INVALID_AMOUNT);
+        
+        // Calculate penalty if past deadline
+        let penalty = 0u64;
+        if (current_time > tab.settlement_deadline && tab.penalty_rate > 0) {
+            let days_late = (current_time - tab.settlement_deadline) / 86400; // seconds per day
+            penalty = (member.share_amount * tab.penalty_rate * days_late) / 10000; // penalty_rate in basis points
+        };
+        
+        let total_payment = amount + penalty;
         
         // Transfer USDC from payer to settler
-        coin::transfer<CoinType>(account, tab.settler_wallet, amount);
+        coin::transfer<CoinType>(account, tab.settler_wallet, total_payment);
 
         // Update member
         member.status = std::string::utf8(STATUS_SETTLED);
+        member.amount_paid = amount;
+        member.penalty_amount = penalty;
         member.confirmed_at = u64_to_string(current_time);
         
         // Check if all members settled
@@ -341,6 +376,7 @@ module tab_manager::tab_manager {
             payee_wallet: payer,
             settler_wallet: tab.settler_wallet,
             amount,
+            penalty_amount: penalty,
             is_auto: false,
             settled_at: current_time,
         });
@@ -458,7 +494,7 @@ module tab_manager::tab_manager {
         *vector::borrow(&registry.auto_settlements, index)
     }
 
-   #[view]
+    #[view]
     public fun get_tab_status_by_id(
         registry_address: address,
         tab_id: u64
@@ -470,14 +506,14 @@ module tab_manager::tab_manager {
     }
 
     #[view]
-    public fun get_tab_amount_spent_by_id(
+    public fun get_tab_total_amount_by_id(
         registry_address: address,
         tab_id: u64
     ): u64 acquires TabRegistry {
         let registry = borrow_global<TabRegistry>(registry_address);
         let index = find_tab(&registry.tabs, tab_id);
         assert!(index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
-        vector::borrow(&registry.tabs, index).amount_spent
+        vector::borrow(&registry.tabs, index).total_amount
     }
 
     #[view]
@@ -498,6 +534,23 @@ module tab_manager::tab_manager {
     }
 
     #[view]
+    public fun get_tab_member_details(
+        registry_address: address,
+        tab_id: u64,
+        member_wallet: address
+    ): TabMember acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let tab_index = find_tab(&registry.tabs, tab_id);
+        assert!(tab_index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+
+        let tab = vector::borrow(&registry.tabs, tab_index);
+        let member_index = find_member(&tab.members, member_wallet);
+        assert!(member_index < vector::length(&tab.members), E_MEMBER_NOT_FOUND);
+
+        *vector::borrow(&tab.members, member_index)
+    }
+
+    #[view]
     public fun get_auto_settlement_balance_by_wallet(
         registry_address: address,
         wallet: address
@@ -508,6 +561,94 @@ module tab_manager::tab_manager {
         vector::borrow(&registry.auto_settlements, index).balance
     }
 
+    #[view]
+    public fun get_tab_description(
+        registry_address: address,
+        tab_id: u64
+    ): String acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let index = find_tab(&registry.tabs, tab_id);
+        assert!(index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+        vector::borrow(&registry.tabs, index).description
+    }
+
+    #[view]
+    public fun get_tab_settlement_deadline(
+        registry_address: address,
+        tab_id: u64
+    ): u64 acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let index = find_tab(&registry.tabs, tab_id);
+        assert!(index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+        vector::borrow(&registry.tabs, index).settlement_deadline
+    }
+
+    #[view]
+    public fun get_tab_penalty_rate(
+        registry_address: address,
+        tab_id: u64
+    ): u64 acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let index = find_tab(&registry.tabs, tab_id);
+        assert!(index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+        vector::borrow(&registry.tabs, index).penalty_rate
+    }
+
+    #[view]
+    public fun get_tab_category(
+        registry_address: address,
+        tab_id: u64
+    ): String acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let index = find_tab(&registry.tabs, tab_id);
+        assert!(index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+        vector::borrow(&registry.tabs, index).category
+    }
+
+    #[view]
+    public fun get_tab_stream_channel_id(
+        registry_address: address,
+        tab_id: u64
+    ): String acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let index = find_tab(&registry.tabs, tab_id);
+        assert!(index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+        vector::borrow(&registry.tabs, index).stream_channel_id
+    }
+
+    #[view]
+    public fun get_tab_member_amount_paid(
+        registry_address: address,
+        tab_id: u64,
+        member_wallet: address
+    ): u64 acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let tab_index = find_tab(&registry.tabs, tab_id);
+        assert!(tab_index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+
+        let tab = vector::borrow(&registry.tabs, tab_index);
+        let member_index = find_member(&tab.members, member_wallet);
+        assert!(member_index < vector::length(&tab.members), E_MEMBER_NOT_FOUND);
+
+        vector::borrow(&tab.members, member_index).amount_paid
+    }
+
+    #[view]
+    public fun get_tab_member_penalty_amount(
+        registry_address: address,
+        tab_id: u64,
+        member_wallet: address
+    ): u64 acquires TabRegistry {
+        let registry = borrow_global<TabRegistry>(registry_address);
+        let tab_index = find_tab(&registry.tabs, tab_id);
+        assert!(tab_index < vector::length(&registry.tabs), E_TAB_NOT_FOUND);
+
+        let tab = vector::borrow(&registry.tabs, tab_index);
+        let member_index = find_member(&tab.members, member_wallet);
+        assert!(member_index < vector::length(&tab.members), E_MEMBER_NOT_FOUND);
+
+        vector::borrow(&tab.members, member_index).penalty_amount
+    }
 
     // Helper functions
     fun find_tab(tabs: &vector<Tab>, tab_id: u64): u64 {

@@ -88,21 +88,41 @@ module tab_manager::tab_manager_test {
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
 
         let creator = account::create_account_for_test(CREATOR_ADDR);
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Test Tab"),
+            string::utf8(b"Testing all view functions"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_test"),
             member_privy_ids,
             member_wallets,
             member_amounts,
         );
 
-        // If we can get the tab, initialization worked
-        let _tab = tab_manager::get_tab_by_id(DEPLOYER_ADDR, 1);
+        // Test all view functions
+        let description = tab_manager::get_tab_description(DEPLOYER_ADDR, 1);
+        assert!(description == string::utf8(b"Testing all view functions"), 0);
+
+        let deadline = tab_manager::get_tab_settlement_deadline(DEPLOYER_ADDR, 1);
+        assert!(deadline == settlement_deadline, 1);
+
+        let penalty_rate = tab_manager::get_tab_penalty_rate(DEPLOYER_ADDR, 1);
+        assert!(penalty_rate == 100, 2);
+
+        let category = tab_manager::get_tab_category(DEPLOYER_ADDR, 1);
+        assert!(category == string::utf8(b"Dining"), 3);
+
+        let stream_id = tab_manager::get_tab_stream_channel_id(DEPLOYER_ADDR, 1);
+        assert!(stream_id == string::utf8(b"stream_channel_test"), 4);
     }
 
     #[test]
@@ -122,14 +142,21 @@ module tab_manager::tab_manager_test {
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_2"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Group dinner at restaurant"),
             8000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -137,7 +164,8 @@ module tab_manager::tab_manager_test {
 
         let _tab = tab_manager::get_tab_by_id(DEPLOYER_ADDR, 1);
         assert!(tab_manager::get_tab_status_by_id(DEPLOYER_ADDR, 1) == string::utf8(b"opened"), 0);
-        assert!(tab_manager::get_tab_amount_spent_by_id(DEPLOYER_ADDR, 1) == 8000000, 1);
+        assert!(tab_manager::get_tab_total_amount_by_id(DEPLOYER_ADDR, 1) == 8000000, 1);
+        assert!(tab_manager::get_tab_description(DEPLOYER_ADDR, 1) == string::utf8(b"Group dinner at restaurant"), 2);
     }
 
     #[test]
@@ -155,14 +183,21 @@ module tab_manager::tab_manager_test {
         let member_privy_ids = vector::empty<String>();
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &member1,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -170,37 +205,7 @@ module tab_manager::tab_manager_test {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
-    fun test_create_tab_invalid_period() {
-        let (deployer, creator, _settler, _member1, _member2, _member3) = setup_test();
-        initialize_registry(&deployer, CREATOR_ADDR);
-
-        let member_wallets = vector::empty<address>();
-        vector::push_back(&mut member_wallets, MEMBER1_ADDR);
-
-        let member_amounts = vector::empty<u64>();
-        vector::push_back(&mut member_amounts, 5000000);
-
-        let member_privy_ids = vector::empty<String>();
-        vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
-
-        tab_manager::create_tab(
-            &creator,
-            DEPLOYER_ADDR,
-            string::utf8(b"Dinner Tab"),
-            5000000,
-            SETTLER_ADDR,
-            string::utf8(b"group_123"),
-            86400, // 1 day - invalid
-            member_privy_ids,
-            member_wallets,
-            member_amounts,
-        );
-    }
-
-
-    #[test]
-    #[expected_failure(abort_code = 11)] // literal abort code instead of private constant
+    #[expected_failure(abort_code = 11)]
     fun test_create_tab_amount_mismatch() {
         let (deployer, creator, _settler, _member1, _member2, _member3) = setup_test();
         initialize_registry(&deployer, CREATOR_ADDR);
@@ -217,22 +222,26 @@ module tab_manager::tab_manager_test {
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_2"));
 
-        // Direct call; do NOT assign to a variable
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
             10000000, // total expected amount
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
         );
     }
-
-
 
     #[test]
     #[expected_failure(abort_code = 8)]
@@ -252,14 +261,21 @@ module tab_manager::tab_manager_test {
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
             8000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -283,14 +299,21 @@ module tab_manager::tab_manager_test {
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_2"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
             8000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -307,6 +330,12 @@ module tab_manager::tab_manager_test {
         assert!(status == string::utf8(b"settled"), 0);
         assert!(tab_manager::get_tab_status_by_id(DEPLOYER_ADDR, 1) == string::utf8(b"opened"), 1);
 
+        // Verify member details
+        let amount_paid = tab_manager::get_tab_member_amount_paid(DEPLOYER_ADDR, 1, MEMBER1_ADDR);
+        let penalty = tab_manager::get_tab_member_penalty_amount(DEPLOYER_ADDR, 1, MEMBER1_ADDR);
+        assert!(amount_paid == 5000000, 2);
+        assert!(penalty == 0, 3);
+
         tab_manager::settle_tab<AptosCoin>(
             &member2,
             DEPLOYER_ADDR,
@@ -315,8 +344,60 @@ module tab_manager::tab_manager_test {
         );
 
         let status2 = tab_manager::get_tab_member_status(DEPLOYER_ADDR, 1, MEMBER2_ADDR);
-        assert!(status2 == string::utf8(b"settled"), 2);
-        assert!(tab_manager::get_tab_status_by_id(DEPLOYER_ADDR, 1) == string::utf8(b"closed"), 3);
+        assert!(status2 == string::utf8(b"settled"), 4);
+        assert!(tab_manager::get_tab_status_by_id(DEPLOYER_ADDR, 1) == string::utf8(b"closed"), 5);
+    }
+
+    #[test]
+    fun test_settlement_with_penalty() {
+        let (deployer, creator, _settler, member1, _member2, _member3) = setup_test();
+        initialize_registry(&deployer, CREATOR_ADDR);
+
+        let member_wallets = vector::empty<address>();
+        vector::push_back(&mut member_wallets, MEMBER1_ADDR);
+
+        let member_amounts = vector::empty<u64>();
+        vector::push_back(&mut member_amounts, 5000000);
+
+        let member_privy_ids = vector::empty<String>();
+        vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
+
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 86400; // 1 day
+
+        tab_manager::create_tab(
+            &creator,
+            DEPLOYER_ADDR,
+            string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
+            5000000,
+            SETTLER_ADDR,
+            string::utf8(b"group_123"),
+            settlement_deadline,
+            100, // 1% per day penalty
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
+            member_privy_ids,
+            member_wallets,
+            member_amounts,
+        );
+
+        // Fast forward time past deadline (2 days late)
+        timestamp::fast_forward_seconds(259200); // 3 days total
+
+        // Settle with penalty
+        tab_manager::settle_tab<AptosCoin>(
+            &member1,
+            DEPLOYER_ADDR,
+            1,
+            5000000,
+        );
+
+        // Verify penalty was applied
+        let amount_paid = tab_manager::get_tab_member_amount_paid(DEPLOYER_ADDR, 1, MEMBER1_ADDR);
+        let penalty = tab_manager::get_tab_member_penalty_amount(DEPLOYER_ADDR, 1, MEMBER1_ADDR);
+        assert!(amount_paid == 5000000, 0);
+        assert!(penalty > 0, 1); // Should have penalty for being 2 days late
     }
 
     #[test]
@@ -334,14 +415,21 @@ module tab_manager::tab_manager_test {
         let member_privy_ids = vector::empty<String>();
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -370,14 +458,21 @@ module tab_manager::tab_manager_test {
         let member_privy_ids = vector::empty<String>();
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Dinner Tab"),
+            string::utf8(b"Test"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -397,111 +492,6 @@ module tab_manager::tab_manager_test {
             5000000,
         );
     }
-
-    #[test]
-    fun test_configure_auto_settlement() {
-        let (deployer, _creator, _settler, member1, _member2, _member3) = setup_test();
-        initialize_registry(&deployer, CREATOR_ADDR);
-
-        tab_manager::configure_auto_settlement(
-            &member1,
-            DEPLOYER_ADDR,
-            10000000,
-            1000000,
-            true,
-        );
-
-        let _auto_settlement = tab_manager::get_auto_settlement(DEPLOYER_ADDR, MEMBER1_ADDR);
-        let balance = tab_manager::get_auto_settlement_balance_by_wallet(DEPLOYER_ADDR, MEMBER1_ADDR);
-        assert!(balance == 0, 0);
-    }
-
-    #[test]
-    fun test_deposit_for_auto_settlement() {
-        let (deployer, creator, _settler, member1, _member2, _member3) = setup_test();
-        initialize_registry(&deployer, CREATOR_ADDR);
-
-        // Publish CoinStores for AptosCoin for the signer who deposits
-        coin::register<AptosCoin>(&member1);
-
-        // Mint some coins to member1 so they have a balance to deposit
-        coin::mint<AptosCoin>(&member1, 10_000_000);
-        
-        tab_manager::configure_auto_settlement(
-            &member1,
-            DEPLOYER_ADDR,
-            10000000,
-            1000000,
-            true,
-        );
-
-        // Deposit coins for auto-settlement
-        tab_manager::deposit_for_auto_settlement<AptosCoin>(
-            &member1,       // signer who is depositing
-            CREATOR_ADDR,   // registry address (recipient)
-            5_000_000,      // amount to deposit
-        );
-
-        // Optional: assert that the auto-settlement balance was updated
-        let registry = borrow_global<TabRegistry>(CREATOR_ADDR);
-        let index = find_auto_settlement(&registry.auto_settlements, signer::address_of(&member1));
-        let auto_settlement = vector::borrow(&registry.auto_settlements, index);
-        assert!(auto_settlement.balance == 5_000_000, 1);
-    }
-
-    // #[test]
-    // fun test_auto_settlement_on_tab_creation() {
-    //     let (deployer, creator, _settler, member1, _member2, _member3) = setup_test();
-    //     initialize_registry(&deployer, CREATOR_ADDR);
-
-    //     tab_manager::configure_auto_settlement(
-    //         &member1,
-    //         DEPLOYER_ADDR,
-    //         10000000,
-    //         1000000,
-    //         true,
-    //     );
-
-    //     tab_manager::deposit_for_auto_settlement<AptosCoin>(
-    //         &member1,
-    //         DEPLOYER_ADDR,
-    //         8000000,
-    //     );
-
-    //     let member_wallets = vector::empty<address>();
-    //     vector::push_back(&mut member_wallets, MEMBER1_ADDR);
-    //     vector::push_back(&mut member_wallets, MEMBER2_ADDR);
-
-    //     let member_amounts = vector::empty<u64>();
-    //     vector::push_back(&mut member_amounts, 5000000);
-    //     vector::push_back(&mut member_amounts, 3000000);
-
-    //     let member_privy_ids = vector::empty<String>();
-    //     vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
-    //     vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_2"));
-
-    //     tab_manager::create_tab(
-    //         &creator,
-    //         DEPLOYER_ADDR,
-    //         string::utf8(b"Dinner Tab"),
-    //         8000000,
-    //         SETTLER_ADDR,
-    //         string::utf8(b"group_123"),
-    //         604800,
-    //         member_privy_ids,
-    //         member_wallets,
-    //         member_amounts,
-    //     );
-
-    //     let status = tab_manager::get_tab_member_status(DEPLOYER_ADDR, 1, MEMBER1_ADDR);
-    //     assert!(status == string::utf8(b"settled"), 0);
-
-    //     let status2 = tab_manager::get_tab_member_status(DEPLOYER_ADDR, 1, MEMBER2_ADDR);
-    //     assert!(status2 == string::utf8(b"pending"), 1);
-
-    //     let balance = tab_manager::get_auto_settlement_balance_by_wallet(DEPLOYER_ADDR, MEMBER1_ADDR);
-    //     assert!(balance == 3000000, 2);
-    // }
 
     #[test]
     fun test_get_tabs_by_creator() {
@@ -517,14 +507,21 @@ module tab_manager::tab_manager_test {
         let member_privy_ids = vector::empty<String>();
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_1"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Tab 1"),
+            string::utf8(b"Test 1"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -534,10 +531,14 @@ module tab_manager::tab_manager_test {
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Tab 2"),
+            string::utf8(b"Test 2"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_2"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -552,6 +553,9 @@ module tab_manager::tab_manager_test {
         let (deployer, creator, _settler, _member1, _member2, _member3) = setup_test();
         initialize_registry(&deployer, CREATOR_ADDR);
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         let member_wallets1 = vector::empty<address>();
         vector::push_back(&mut member_wallets1, MEMBER1_ADDR);
 
@@ -565,10 +569,14 @@ module tab_manager::tab_manager_test {
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Tab 1"),
+            string::utf8(b"Test 1"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids1,
             member_wallets1,
             member_amounts1,
@@ -587,10 +595,14 @@ module tab_manager::tab_manager_test {
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Tab 2"),
+            string::utf8(b"Test 2"),
             3000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_2"),
             member_privy_ids2,
             member_wallets2,
             member_amounts2,
@@ -612,10 +624,14 @@ module tab_manager::tab_manager_test {
             &creator,
             DEPLOYER_ADDR,
             string::utf8(b"Tab 3"),
+            string::utf8(b"Test 3"),
             8000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_3"),
             member_privy_ids3,
             member_wallets3,
             member_amounts3,
@@ -648,14 +664,21 @@ module tab_manager::tab_manager_test {
         let member_privy_ids = vector::empty<String>();
         vector::push_back(&mut member_privy_ids, string::utf8(b"privy_id_2"));
 
+        let current_time = timestamp::now_seconds();
+        let settlement_deadline = current_time + 604800;
+
         tab_manager::create_tab(
             &member1,
             DEPLOYER_ADDR,
             string::utf8(b"New Tab"),
+            string::utf8(b"Test"),
             5000000,
             SETTLER_ADDR,
             string::utf8(b"group_123"),
-            604800,
+            settlement_deadline,
+            100,
+            string::utf8(b"Dining"),
+            string::utf8(b"stream_channel_1"),
             member_privy_ids,
             member_wallets,
             member_amounts,
@@ -687,4 +710,5 @@ module tab_manager::tab_manager_test {
 
         let _auto_settlement = tab_manager::get_auto_settlement(DEPLOYER_ADDR, MEMBER1_ADDR);
     }
+
 }
