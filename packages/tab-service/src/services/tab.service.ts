@@ -24,6 +24,7 @@ interface CreateTabData {
     shareAmount?: number; // If null, split equally
   }>;
   settlementDeadline?: Date; // Optional deadline
+  settlementWallet?: string; // Optional settlement wallet
   penaltyRate?: number; // Default 5%
   autoSettle?: boolean; // Auto-settle after deadline
 }
@@ -54,7 +55,7 @@ export class TabService {
       throw new Error('Failed to verify friendships');
     }
 
-    const friendIds = new Set(friendships.map((f) => f.friend_id));
+    const friendIds = new Set(friendships.map((f: {friend_id: string}) => f.friend_id));
     const nonFriends = participantIds.filter((id) => !friendIds.has(id));
 
     if (nonFriends.length > 0) {
@@ -93,6 +94,17 @@ export class TabService {
       }));
     }
 
+    // Get creator info
+    const { data: creator, error: creatorError } = await supabase
+      .from('users')
+      .select('username, email, wallet_address')
+      .eq('id', creatorId)
+      .single();
+
+      if (creatorError || !creator) {
+        throw new Error('Failed to get creator info');
+      }
+
     // Create tab
     const { data: tab, error: tabError } = await supabase
       .from('tabs')
@@ -105,6 +117,7 @@ export class TabService {
         currency,
         status: 'OPEN',
         settlement_deadline: data.settlementDeadline?.toISOString(),
+        settlement_wallet: data.settlementWallet || creator?.wallet_address,
         penalty_rate: data.penaltyRate || 5.0,
         auto_settle_enabled: data.autoSettle || false,
       })
@@ -160,13 +173,6 @@ export class TabService {
       logger.error('Failed to create chat channel', { tabId: tab.id, error });
       // Don't fail tab creation if chat fails
     }
-
-    // Get creator info
-    const { data: creator } = await supabase
-      .from('users')
-      .select('username, email')
-      .eq('id', creatorId)
-      .single();
 
     // Notify all participants
     for (const participantId of participantIds) {
@@ -256,14 +262,14 @@ export class TabService {
       .select('user_id')
       .eq('group_id', groupId);
     
-    const memberIds = members?.map(m => m.user_id) || [];
+    const memberIds = members?.map((m: {user_id: string}) => m.user_id) || [];
     
     // Create tab with group_id
     const tab = await this.createTab(userId, {
       ...tabData,
       participants: memberIds
-        .filter(id => id !== userId)
-        .map(id => ({ userId: id })),
+        .filter((id: string) => id !== userId)
+        .map((id: string) => ({ userId: id })),
     });
     
     // Link tab to group
@@ -456,7 +462,7 @@ export class TabService {
       `)
       .eq('user_id', userId);
     
-    const stats = data && data.reduce((acc: Record<string, {count: number, totalAmount: Decimal}>, item) => {
+    const stats = data && data.reduce((acc: Record<string, {count: number, totalAmount: Decimal}>, item: any) => {
       const category = item.tab?.category as TabCategory;
       if (!acc[category]) {
         acc[category] = {
@@ -631,7 +637,7 @@ export class TabService {
       .select('paid')
       .eq('tab_id', tabId);
 
-    const allPaid = allParticipants?.every((p) => p.paid);
+    const allPaid = allParticipants?.every((p: { paid: boolean | null}) => p.paid);
 
     if (allPaid) {
       // Mark tab as settled
