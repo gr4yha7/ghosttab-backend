@@ -2,13 +2,11 @@ module tab_manager::tab_manager {
     use std::string::String;
     use std::signer;
     use std::vector;
+    use std::object::{Self, Object};
     use aptos_framework::timestamp;
-    use aptos_framework::coin;
     use aptos_framework::event;
-
-    // USDC coin type for Movement testnet (update this address after deployment)
-    // This should be the USDC token address on Movement testnet
-    struct USDC {}
+    use aptos_framework::fungible_asset::{Self, Metadata, FungibleStore};
+    use aptos_framework::primary_fungible_store;
 
     // Error codes
     const E_NOT_AUTHORIZED: u64 = 1;
@@ -73,9 +71,9 @@ module tab_manager::tab_manager {
         next_tab_id: u64,
         authorized_creator: address,
         auto_settlements: vector<AutoSettlement>,
-        usdc_coin_type: String, // Store USDC coin type address
+        usdc_metadata: Object<Metadata>,
     }
-
+    
     // Events
     #[event]
     struct TabCreatedEvent has store, drop {
@@ -123,17 +121,20 @@ module tab_manager::tab_manager {
     public entry fun initialize(
         account: &signer, 
         authorized_creator: address,
-        usdc_coin_type: String
+        usdc_metadata_address: address
     ) {
         let deployer = signer::address_of(account);
         
         if (!exists<TabRegistry>(deployer)) {
+            // Convert address to Object<Metadata>
+            let usdc_metadata = object::address_to_object<Metadata>(usdc_metadata_address);
+            
             move_to(account, TabRegistry {
                 tabs: vector::empty(),
                 next_tab_id: 1,
                 authorized_creator,
                 auto_settlements: vector::empty(),
-                usdc_coin_type,
+                usdc_metadata,
             });
         };
     }
@@ -302,7 +303,7 @@ module tab_manager::tab_manager {
     }
 
     // Settle a tab member's payment with USDC
-    public entry fun settle_tab<CoinType>(
+    public entry fun settle_tab(
         account: &signer,
         registry_address: address,
         tab_id: u64,
@@ -342,8 +343,13 @@ module tab_manager::tab_manager {
         
         let total_payment = amount + penalty;
         
-        // Transfer USDC from payer to settler
-        coin::transfer<CoinType>(account, tab.settler_wallet, total_payment);
+        // Transfer USDC from payer to settler using primary_fungible_store
+        primary_fungible_store::transfer(
+            account,
+            registry.usdc_metadata,
+            tab.settler_wallet,
+            total_payment
+        );
 
         // Update member
         member.status = std::string::utf8(STATUS_SETTLED);
@@ -382,63 +388,7 @@ module tab_manager::tab_manager {
         });
     }
 
-    // Add or update auto settlement configuration
-    public entry fun configure_auto_settlement(
-        account: &signer,
-        registry_address: address,
-        max_amount: u64,
-        min_amount: u64,
-        auto_settle: bool,
-    ) acquires TabRegistry {
-        let wallet = signer::address_of(account);
-        let registry = borrow_global_mut<TabRegistry>(registry_address);
-        
-        let index = find_auto_settlement(&registry.auto_settlements, wallet);
-        
-        if (index < vector::length(&registry.auto_settlements)) {
-            // Update existing
-            let auto_settlement = vector::borrow_mut(&mut registry.auto_settlements, index);
-            auto_settlement.max_amount = max_amount;
-            auto_settlement.min_amount = min_amount;
-            auto_settlement.auto_settle = auto_settle;
-        } else {
-            // Create new
-            let auto_settlement = AutoSettlement {
-                wallet,
-                max_amount,
-                min_amount,
-                balance: 0,
-                auto_settle,
-            };
-            vector::push_back(&mut registry.auto_settlements, auto_settlement);
-        };
-    }
 
-    // Deposit USDC for auto settlement
-    public entry fun deposit_for_auto_settlement<CoinType>(
-        account: &signer,
-        registry_address: address,
-        amount: u64,
-    ) acquires TabRegistry {
-        let wallet = signer::address_of(account);
-        let registry = borrow_global_mut<TabRegistry>(registry_address);
-        
-        // Transfer USDC to the registry address
-        coin::transfer<CoinType>(account, registry_address, amount);
-        
-        let index = find_auto_settlement(&registry.auto_settlements, wallet);
-        assert!(index < vector::length(&registry.auto_settlements), E_NOT_FOUND);
-        
-        let auto_settlement = vector::borrow_mut(&mut registry.auto_settlements, index);
-        auto_settlement.balance = auto_settlement.balance + amount;
-        
-        // Emit deposit event
-        event::emit(DepositEvent {
-            wallet,
-            amount,
-            new_balance: auto_settlement.balance,
-        });
-    }
 
     // View functions
     #[view]
