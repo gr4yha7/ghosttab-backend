@@ -30,15 +30,6 @@ export const sendFriendRequestSchema = z.object({
   }),
 });
 
-export const acceptFriendRequestSchema = z.object({
-  params: z.object({
-    friendshipId: uuidSchema,
-  }),
-  body: z.object({
-    otpCode: z.string().length(6).regex(/^\d{6}$/).optional(),
-  }),
-});
-
 export const friendshipIdParamSchema = z.object({
   params: z.object({
     friendshipId: uuidSchema,

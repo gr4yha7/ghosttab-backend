@@ -7,7 +7,6 @@ import {
   updateAutoSettleSchema,
   searchUsersSchema,
   sendFriendRequestSchema,
-  acceptFriendRequestSchema,
   friendshipIdParamSchema,
   friendIdParamSchema,
   getFriendsSchema,
@@ -74,7 +73,7 @@ router.post('/friends/request', validate(sendFriendRequestSchema), userControlle
  */
 router.post(
   '/friends/:friendshipId/accept',
-  validate(acceptFriendRequestSchema),
+  validate(friendshipIdParamSchema),
   userController.acceptFriendRequest
 );
 

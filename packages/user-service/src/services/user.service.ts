@@ -187,10 +187,6 @@ export class UserService {
           .eq('id', fromUserId)
           .single();
 
-        // await otpService.createAndSendOTP(toIdentifier, 'FRIEND_REQUEST', {
-        //   fromUserId,
-        //   fromUsername: fromUser?.username || fromUser?.email,
-        // });
 
         // Also send a regular notification email
         await emailService.sendFriendRequestNotification(
@@ -205,7 +201,7 @@ export class UserService {
     }
 
     if (!toUserId) {
-      throw new Error('Friend request recipient ID not provided');
+      throw new Error('Friend request recipient not found');
     }
 
     // Check if friendship already exists
@@ -275,8 +271,7 @@ export class UserService {
 
   async acceptFriendRequest(
     userId: string,
-    friendshipId: string,
-    otpCode?: string
+    friendshipId: string
   ): Promise<void> {
     // Get friendship
     const { data: friendship, error: fetchError } = await supabase
@@ -290,29 +285,6 @@ export class UserService {
     if (fetchError || !friendship) {
       throw new NotFoundError('Friend request');
     }
-
-    // If OTP provided, verify it
-    // if (otpCode) {
-    //   const { data: user } = await supabase
-    //     .from('users')
-    //     .select('email')
-    //     .eq('id', userId)
-    //     .single();
-
-    //   if (!user?.email) {
-    //     throw new ValidationError('Email required for OTP verification');
-    //   }
-
-    //   const verification = await otpService.verifyOTP(
-    //     user.email,
-    //     otpCode,
-    //     'FRIEND_ACCEPT'
-    //   );
-
-    //   if (!verification.valid) {
-    //     throw new ValidationError('Invalid or expired OTP code');
-    //   }
-    // }
 
     // Update friendship status
     const { error: updateError } = await supabase
