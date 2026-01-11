@@ -80,6 +80,11 @@ Then restart your IDE's TypeScript server.
 
 ```
 ghosttab-backend/
+├── move_contract/
+│   ├── build/
+│   ├── scripts/ 
+│   ├── sources/
+│   └── tests/  
 ├── packages/
 │   ├── common/              # Shared utilities, types, and configurations
 │   ├── auth-service/        # Authentication and user onboarding
@@ -101,6 +106,10 @@ ghosttab-backend/
 - **Blockchain**: Movement Network (MoveVM / Aptos compatible)
 - **USDC Balance Service**: Robust balance fetching with fallbacks (Indexer + `0x1::primary_fungible_store::balance` view function).
 - **Trust Score Tracking**: Standardized numeric scoring based on settlement punctuality.
+- **Notifications**: Redis Pub/Sub
+- **Chat/Messaging**: GetStream SDK
+- **Email**: MailGun API
+- **Monorepo**: Turborepo
 
 ## Services
 
@@ -159,7 +168,7 @@ Required environment variables:
 - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
 - `REDIS_URL`,
 - `STREAM_API_KEY`, `STREAM_API_SECRET`
-- `RESEND_API_KEY`
+- `MAILGUN_API_KEY`
 - `MOVEMENT_RPC_URL`, `MOVEMENT_CHAIN_ID`
 
 ### 3. Database Setup
