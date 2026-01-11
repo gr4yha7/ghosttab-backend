@@ -33,14 +33,11 @@ export class UserService {
       avatarUrl: user.avatar_url,
       autoSettle: user.auto_settle,
       vaultAddress: user.vault_address,
-      trustScore: {
-        score: user.trust_score,
-        tier: trustTier.tier,
-        color: trustTier.color,
-        onTimeSettlements: user.settlements_on_time,
-        lateSettlements: user.settlements_late,
-        totalSettlements: user.total_settlements,
-      },
+      trustScore: user.trust_score ?? 100,
+      settlementsOnTime: user.settlements_on_time,
+      settlementsLate: user.settlements_late,
+      totalSettlements: user.total_settlements,
+      avgSettlementDays: user.avg_settlement_days,
       createdAt: user.created_at,
     };
   }
@@ -114,7 +111,7 @@ export class UserService {
       email: user.email,
       walletAddress: user.wallet_address,
       avatarUrl: user.avatar_url,
-      trustScore: user.trust_score,
+      trustScore: user.trust_score ?? 100,
     }));
   }
 
@@ -130,7 +127,8 @@ export class UserService {
           username,
           email,
           wallet_address,
-          avatar_url
+          avatar_url,
+          trust_score
         )
       `)
       .eq('user_id', userId);
@@ -158,6 +156,7 @@ export class UserService {
         email: f.friend.email,
         walletAddress: f.friend.wallet_address,
         avatarUrl: f.friend.avatar_url,
+        trustScore: f.friend.trust_score ?? 100,
       },
     }));
   }
