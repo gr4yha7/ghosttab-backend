@@ -1,6 +1,6 @@
 # GhostTab Backend
 
-A microservices-based backend for GhostTab - a Venmo-style split payments app using Privy wallets on the Movement Network.
+A microservices-based backend for GhostTab - a Venmo + SplitWise-style split payments app using Privy wallets on the Movement Network.
 
 ## Quick Start
 
