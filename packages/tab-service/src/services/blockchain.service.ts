@@ -17,6 +17,8 @@ import {
   AccountData,
   Ed25519Signature,
   Ed25519PublicKey,
+  Ed25519PrivateKey,
+  Account,
   AccountAuthenticatorEd25519,
   generateSigningMessageForTransaction
 } from "@aptos-labs/ts-sdk";
@@ -34,7 +36,7 @@ const gasStationClient = new GasStationClient(config.shinami.gasStationAccessKey
 export class BlockchainService {
   /**
    * Verify transaction on Movement Network
-   * This is a placeholder - implement actual RPC calls based on Movement Network's API
+   * Fetches transaction from blockchain and validates its status
    */
   async verifyTransaction(txHash: string): Promise<{
     confirmed: boolean;
@@ -42,34 +44,105 @@ export class BlockchainService {
     toAddress?: string;
     amount?: string;
     blockNumber?: number;
+    assetMetadata?: string;
   }> {
     try {
-      // TODO: Implement actual Movement Network RPC call
-      // Example using fetch:
-      // const response = await fetch(config.movement.rpcUrl, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     jsonrpc: '2.0',
-      //     method: 'eth_getTransactionByHash', // or Movement equivalent
-      //     params: [txHash],
-      //     id: 1,
-      //   }),
-      // });
-      // const data = await response.json();
+      logger.info('Verifying transaction on Movement Network', { txHash });
 
-      logger.info('Verifying transaction', { txHash });
+      // Fetch transaction from Movement Network using Aptos SDK
+      const transaction = await aptos.getTransactionByHash({
+        transactionHash: txHash
+      });
 
-      // Mock implementation - replace with actual verification
+      // Check if transaction is successful
+      let isConfirmed = false;
+
+      if ('success' in transaction) {
+        isConfirmed = transaction.success === true;
+
+        if (!isConfirmed) {
+          logger.warn('Transaction found but not successful', {
+            txHash,
+            success: transaction.success,
+            vmStatus: transaction.vm_status
+          });
+        }
+      } else {
+        // Pending transaction - not confirmed yet
+        logger.warn('Transaction is still pending', { txHash });
+      }
+
+      // Extract details from transaction payload
+      let fromAddress: string | undefined;
+      let toAddress: string | undefined;
+      let amount: string | undefined;
+      let blockNumber: number | undefined;
+      let assetMetadata: string | undefined;
+
+      if (transaction.type === 'user_transaction') {
+        fromAddress = transaction.sender;
+        blockNumber = parseInt(transaction.version);
+
+        const payload = transaction.payload as any;
+
+        // Handle fungible asset transfers (USDC, etc.)
+        if (payload?.function === '0x1::primary_fungible_store::transfer') {
+          // Arguments: [metadata, recipient, amount]
+          assetMetadata = payload.arguments?.[0];
+          toAddress = payload.arguments?.[1];
+          amount = payload.arguments?.[2]?.toString();
+
+          logger.info('Fungible asset transfer verified', {
+            txHash,
+            from: fromAddress,
+            to: toAddress,
+            amount,
+            assetMetadata,
+            confirmed: isConfirmed
+          });
+        }
+        // Handle native APT transfers
+        else if (payload?.function === '0x1::aptos_account::transfer') {
+          // Arguments: [recipient_address, amount_in_octas]
+          toAddress = payload.arguments?.[0];
+          amount = payload.arguments?.[1]?.toString();
+
+          logger.info('APT transfer verified', {
+            txHash,
+            from: fromAddress,
+            to: toAddress,
+            amount,
+            confirmed: isConfirmed
+          });
+        } else {
+          logger.warn('Transaction is not a standard transfer', {
+            txHash,
+            function: payload?.function
+          });
+        }
+      } else {
+        logger.warn('Transaction is not a user transaction', {
+          txHash,
+          type: transaction.type
+        });
+      }
+
       return {
-        confirmed: true,
-        fromAddress: '0x...',
-        toAddress: '0x...',
-        amount: '100',
-        blockNumber: 12345,
+        confirmed: isConfirmed,
+        fromAddress,
+        toAddress,
+        amount,
+        blockNumber,
+        assetMetadata,
       };
-    } catch (error) {
-      logger.error('Failed to verify transaction', { txHash, error });
+    } catch (error: any) {
+      // Handle specific error cases
+      if (error?.status === 404 || error?.message?.includes('not found')) {
+        logger.error('Transaction not found on blockchain', { txHash });
+        throw new Error('Transaction not found on blockchain');
+      }
+
+      logger.error('Failed to verify transaction', { txHash, error: error?.message || error });
       throw new Error('Failed to verify blockchain transaction');
     }
   }
@@ -79,9 +152,7 @@ export class BlockchainService {
    */
   async generateHash(
     sender: string,
-    func: `${string}::${string}::${string}`,
-    typeArguments: any[],
-    functionArguments: any[]
+    amount: number,
   ): Promise<{
     success: boolean,
     hash: string,
@@ -89,14 +160,12 @@ export class BlockchainService {
   }> {
     try {
       const senderAddress = AccountAddress.from(sender);
-
-      // Build generic Move transaction
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
-          function: func,
-          typeArguments: typeArguments || [],
-          functionArguments,
+          function: "0x1::primary_fungible_store::transfer",
+          typeArguments: ["0x1::fungible_asset::Metadata"],
+          functionArguments: [config.movement.usdcAddress, config.movement.ghosttabSettlementAddress, amount],
         },
       });
 
@@ -183,6 +252,54 @@ export class BlockchainService {
   }
 
   /**
+   * Get wallet USDC balance
+   */
+  async getUSDCBalance(walletAddress: string): Promise<number> {
+    try {
+      logger.info('Getting USDC balance', { walletAddress });
+      const balanceResponse = await aptos.getCurrentFungibleAssetBalances({
+        options: {
+          where: {
+            owner_address: { _eq: walletAddress },
+            asset_type: { _eq: config.movement.usdcAddress }
+          }
+        }
+      });
+
+      const USDC_DECIMALS = 6;
+      if (!balanceResponse || balanceResponse.length === 0) {
+        logger.info('No USDC balance record found for wallet', { walletAddress });
+        return 0;
+      }
+
+      const balance = balanceResponse[0].amount / 10 ** USDC_DECIMALS;
+      return balance;
+    } catch (error) {
+      logger.warn('Indexer failed to get USDC balance, falling back to view function', { walletAddress });
+      try {
+        const result = await aptos.view({
+          payload: {
+            function: "0x1::primary_fungible_store::balance",
+            typeArguments: ["0x1::fungible_asset::Metadata"],
+            functionArguments: [walletAddress, config.movement.usdcAddress],
+          },
+        });
+
+        const USDC_DECIMALS = 6;
+        const amount = Number(result[0]);
+        return amount / 10 ** USDC_DECIMALS;
+      } catch (viewError) {
+        console.error('DEBUG: View function also failed:', JSON.stringify(viewError, Object.getOwnPropertyNames(viewError)));
+        logger.error('Failed to get wallet USDC balance via both indexer and view', {
+          walletAddress,
+          error: viewError instanceof Error ? viewError.message : String(viewError),
+        });
+        throw new Error('Failed to get wallet USDC balance');
+      }
+    }
+  }
+
+  /**
    * Get account information
    */
   async getAccountInfo(walletAddress: string): Promise<AccountData> {
@@ -212,15 +329,93 @@ export class BlockchainService {
       throw new Error('Failed to sponsor transaction');
     }
   }
-}
 
-//  View function
-// const result = await aptos.view({
-//   payload: {
-//       function: func, // Module address::module_name::function_name
-//       typeArguments: typeArguments || [], // Type arguments if required
-//       functionArguments: functionArguments || [], // Arguments for the function
-//   },
-// });
+  async createTabTxSignature() {
+    const privateKeyHex = "The ADMIN_PRIVATE_KEY"; // Replace with your actual private key
+    const privateKey = new Ed25519PrivateKey(privateKeyHex);
+    const account = Account.fromPrivateKey({ privateKey });
+
+    console.log("Creating tab from account:", account.accountAddress.toString());
+
+    try {
+      const transaction = await aptos.transaction.build.simple({
+        sender: account.accountAddress,
+        withFeePayer: true,
+        data: {
+          function: "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8::tab_manager::create_tab",
+          functionArguments: [
+            "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8", // registry_address
+            "Restaurant Bill 2", // title
+            "Splitting the dinner bill from Friday night", // description
+            2000000, // total_amount (2 USDC with 6 decimals)
+            "0x03842b58e83a22f97d49fe3acfb401421c86bc88f37634e652a14279b6b98d4e", // settler_wallet
+            "group_xyz", // group_id
+            1736640000, // settlement_deadline (Unix timestamp)
+            500, // penalty_rate (5% in basis points)
+            "Food", // category
+            "stream_channel_001", // stream_channel_id
+            ["privy_alice", "privy_bob"], // member_privy_ids (vector)
+            [
+              "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8",
+              "0xa2e0c299a145db4405b8d8922a45f075e8c6075aa79d8164170426dfde2913ef"
+            ], // member_wallets (vector)
+            [1000000, 1000000] // member_amounts (vector - 1 USDC each)
+          ],
+        },
+      });
+
+
+      const senderAuth = aptos.transaction.sign({
+        signer: account,
+        transaction: transaction
+      });
+
+      // Serialize to bytes for sending to backend
+      const transactionBytes = transaction.bcsToBytes();
+      const senderAuthBytes = senderAuth.bcsToBytes();
+
+      // Convert to hex strings for JSON serialization
+      const transactionHex = Buffer.from(transactionBytes).toString('hex');
+      const senderAuthHex = Buffer.from(senderAuthBytes).toString('hex');
+
+
+      // try {
+      //     const response = await fetch(apiEndpoint, {
+      //         method: 'POST',
+      //         headers: {
+      //             'Content-Type': 'application/json',
+      //         },
+      //         body: JSON.stringify({ 
+      //             transaction: transactionHex,
+      //             senderAuth: senderAuthHex
+      //           }),
+      //     });
+
+      //     // Still need to check for HTTP errors manually as fetch only rejects on network errors
+      //     if (!response.ok) {
+      //         throw new Error(`HTTP error! status: ${response.status}`);
+      //     }
+
+      //     const data = await response.json();
+      //     console.log('Success:', data);
+      //     console.log("✅ Transaction submitted:", data.hash.hash);
+
+      //     const executedTransaction = await aptos.waitForTransaction({
+      //       transactionHash: data.hash.hash,
+      //     });
+
+      //     console.log("✅ Transaction status:", executedTransaction.success ? "SUCCESS" : "FAILED");
+      //     console.log("🔍 View on explorer: https://explorer.movementnetwork.xyz/txn/" + data.hash.hash);
+
+      // } catch (error) {
+      //     console.error('Error:', error);
+      // }
+
+
+    } catch (error) {
+      console.error("❌ Error creating tab:", error);
+    }
+  }
+}
 
 export const blockchainService = new BlockchainService();
