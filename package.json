@@ -19,5 +19,8 @@
     "turbo": "^1.13.4",
     "typescript": "^5.3.3"
   },
-  "packageManager": "npm@10.9.2"
+  "packageManager": "npm@10.9.2",
+  "dependencies": {
+    "@open-rpc/client-js": "^1.8.1"
+  }
 }
