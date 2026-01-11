@@ -14,21 +14,21 @@ export const getStreamClient = (): StreamChat => {
   return streamClient;
 };
 
-export const generateStreamToken = (userId: string): string => {
+export const generateStreamToken = (streamId: string): string => {
   try {
     const client = getStreamClient();
-    const token = client.createToken(userId);
-    
-    logger.info('Generated Stream token', { userId });
+    const token = client.createToken(streamId);
+
+    logger.info('Generated Stream token', { streamId });
     return token;
   } catch (error) {
-    logger.error('Failed to generate Stream token', { userId, error });
-    throw new Error('Failed to generate chat token');
+    logger.error('Failed to generate Stream token', { streamId, error: error instanceof Error ? error.message : error });
+    throw new Error(`Failed to generate chat token: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
 export const upsertStreamUser = async (
-  userId: string,
+  streamId: string,
   userData: {
     name?: string;
     image?: string;
@@ -36,17 +36,17 @@ export const upsertStreamUser = async (
 ): Promise<void> => {
   try {
     const client = getStreamClient();
-    
+
     await client.upsertUser({
-      id: userId,
-      name: userData.name || userId,
+      id: streamId,
+      name: userData.name || streamId,
       image: userData.image,
     });
-    
-    logger.info('Upserted Stream user', { userId });
+
+    logger.info('Upserted Stream user', { streamId });
   } catch (error) {
-    logger.error('Failed to upsert Stream user', { userId, error });
-    throw new Error('Failed to create chat user');
+    logger.error('Failed to upsert Stream user', { streamId, error: error instanceof Error ? error.message : error });
+    throw new Error(`Failed to create chat user: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
@@ -54,7 +54,7 @@ export const deleteStreamUser = async (userId: string): Promise<void> => {
   try {
     const client = getStreamClient();
     await client.deleteUser(userId, { mark_messages_deleted: true });
-    
+
     logger.info('Deleted Stream user', { userId });
   } catch (error) {
     logger.error('Failed to delete Stream user', { userId, error });

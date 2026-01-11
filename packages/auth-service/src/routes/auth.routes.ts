@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validate } from '@ghosttab/common';
 import { authController } from '../controllers/auth.controller';
-import { loginSchema, refreshTokenSchema } from '../validators/auth.validators';
+import { loginSchema } from '../validators/auth.validators';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();

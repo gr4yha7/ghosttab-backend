@@ -12,9 +12,10 @@ interface VerifyTokenResponse {
 export class AuthService {
   async verifyPrivyIdTokenAndGetUser(privyIdToken: string): Promise<VerifyTokenResponse> {
     try {
+      // logger.info('Verifying Privy token', { privyIdToken });
       // Get user details from Privy
-      const privyUser = await privyClient.getUser({idToken: privyIdToken});
-      
+      const privyUser = await privyClient.getUser({ idToken: privyIdToken });
+
       if (!privyUser) {
         throw new UnauthorizedError('User not found in Privy');
       }
@@ -33,7 +34,7 @@ export class AuthService {
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('privy_id', privyUserId)
+        .eq('id', privyUserId)
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
@@ -47,7 +48,7 @@ export class AuthService {
       if (!existingUser) {
         // Create new user
         isNewUser = true;
-        
+
         const { data: newUser, error: createError } = await supabase
           .from('users')
           .insert({
@@ -66,15 +67,15 @@ export class AuthService {
 
         userId = newUser.id;
 
-        // Create Stream Chat user
-        await upsertStreamUser(userId, {
+        // Create Stream Chat user using wallet address as ID
+        await upsertStreamUser(walletAddress, {
           name: newUser.username || email || userId,
-          image: newUser.avatar_url || undefined, 
+          image: newUser.avatar_url || undefined,
         });
 
         // Generate and store Stream token
-        const streamToken = generateStreamToken(userId);
-        
+        const streamToken = generateStreamToken(walletAddress);
+
         await supabase
           .from('users')
           .update({ stream_token: streamToken })
@@ -100,8 +101,8 @@ export class AuthService {
             .eq('id', userId);
         }
 
-        // Ensure Stream user exists
-        await upsertStreamUser(userId, {
+        // Ensure Stream user exists using wallet address as ID
+        await upsertStreamUser(walletAddress, {
           name: existingUser.username || email || userId,
           image: existingUser.avatar_url || undefined,
         });
@@ -117,10 +118,13 @@ export class AuthService {
         isNewUser,
       };
     } catch (error) {
-      if (error instanceof UnauthorizedError) {
+      if (error instanceof UnauthorizedError || error instanceof InternalServerError) {
         throw error;
       }
-      logger.error('Error verifying Privy token', { error });
+      logger.error('Error during Privy token verification process', {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw new UnauthorizedError('Invalid authentication token');
     }
   }
@@ -131,7 +135,7 @@ export class AuthService {
     streamToken: string;
     isNewUser: boolean;
   }> {
-    const { userId, isNewUser } = 
+    const { userId, isNewUser } =
       await this.verifyPrivyIdTokenAndGetUser(privyToken);
 
     // Get full user data
@@ -148,7 +152,7 @@ export class AuthService {
     // Get or generate Stream token
     let streamToken = user.stream_token;
     if (!streamToken) {
-      streamToken = generateStreamToken(userId);
+      streamToken = generateStreamToken(user.wallet_address);
       await supabase
         .from('users')
         .update({ stream_token: streamToken })
@@ -165,6 +169,11 @@ export class AuthService {
         avatarUrl: user.avatar_url,
         autoSettle: user.auto_settle,
         vaultAddress: user.vault_address,
+        trustScore: user.trust_score ?? 100,
+        settlementsOnTime: user.settlements_on_time ?? 0,
+        settlementsLate: user.settlements_late ?? 0,
+        totalSettlements: user.total_settlements ?? 0,
+        avgSettlementDays: user.avg_settlement_days ?? 0,
       },
       streamToken,
       isNewUser,
@@ -192,6 +201,11 @@ export class AuthService {
       avatarUrl: user.avatar_url,
       autoSettle: user.auto_settle,
       vaultAddress: user.vault_address,
+      trustScore: user.trust_score ?? 100,
+      settlementsOnTime: user.settlements_on_time ?? 0,
+      settlementsLate: user.settlements_late ?? 0,
+      totalSettlements: user.total_settlements ?? 0,
+      avgSettlementDays: user.avg_settlement_days ?? 0,
       createdAt: user.created_at,
     };
   }
