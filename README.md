@@ -67,14 +67,6 @@ npm run dev
 
 ### Troubleshooting "@ghosttab/common not found"
 
-If you see this error, run:
-
-```bash
-./fix-common-module.sh
-```
-
-Or manually:
-
 ```bash
 cd packages/common
 npm run clean
@@ -106,41 +98,32 @@ ghosttab-backend/
 - **Framework**: Express.js (TypeScript)
 - **Database**: Supabase (PostgreSQL with RLS)
 - **Authentication**: Privy (embedded wallets)
-- **Blockchain**: Movement Network (MoveVM)
-- **Notifications**: Upstash Redis Pub/Sub
-- **Chat**: GetStream SDK
-- **Email**: Resend API
-- **Monorepo**: Turborepo
+- **Blockchain**: Movement Network (MoveVM / Aptos compatible)
+- **USDC Balance Service**: Robust balance fetching with fallbacks (Indexer + `0x1::primary_fungible_store::balance` view function).
+- **Trust Score Tracking**: Standardized numeric scoring based on settlement punctuality.
 
 ## Services
 
 ### Auth Service (Port 3001)
-- Privy token verification
-- JWT generation
-- GetStream token generation
-- User onboarding
+- Privy token verification and JWT generation.
+- GetStream token generation for seamless chat integration.
 
 ### User Service (Port 3002)
-- User profile management
-- Friend requests and management
-- OTP-based invitations
-- User search
+- User profile and friend management.
+- **Group Management**: Full support for group visibility and role-based permissions.
+- **Trust Score Service**: Real-time updates to user reliability tiers.
 
 ### Tab Service (Port 3003)
-- Create and manage tabs
-- Split calculations
-- Settlement tracking
-- Auto-settle configuration
+- Create and manage tabs (individual & group).
+- **Movement Integration**: Fetches USDC balances directly from the network.
+- Settlement verification on the Movement Network.
 
 ### Notification Service (Port 3004)
-- WebSocket/SSE for real-time notifications
-- Redis Pub/Sub integration
-- Push notification delivery
+- WebSocket/SSE for real-time alerts.
+- In-app unread counts and badge management.
 
 ### Chat Service (Port 3005)
-- GetStream channel management
-- Tab group chat creation
-- Message history
+- GetStream channel management for automated tab group chats.
 
 ## Prerequisites
 
@@ -172,13 +155,12 @@ cp .env.example .env
 ```
 
 Required environment variables:
-- `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`
-- `UPSTASH_REDIS_URL`, `UPSTASH_REDIS_TOKEN`
+- `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`
+- `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
+- `REDIS_URL`,
 - `STREAM_API_KEY`, `STREAM_API_SECRET`
 - `RESEND_API_KEY`
 - `MOVEMENT_RPC_URL`, `MOVEMENT_CHAIN_ID`
-- `JWT_SECRET`
 
 ### 3. Database Setup
 
@@ -237,19 +219,10 @@ Response:
 {
   "success": true,
   "data": {
-    "token": "jwt_token",
     "user": { ... },
     "streamToken": "stream_token",
     "isNewUser": false
   }
-}
-```
-
-#### POST `/auth/refresh`
-Refresh JWT token
-```json
-{
-  "token": "old_jwt_token"
 }
 ```
 
@@ -284,23 +257,37 @@ Get pending friend requests
 Send friend request
 ```json
 {
-  "toIdentifier": "email@example.com or userId"
+  "toIdentifier": "email@example.com or username"
 }
 ```
 
 #### POST `/users/friends/:friendshipId/accept`
-Accept friend request (optionally with OTP)
-```json
-{
-  "otpCode": "123456"
-}
-```
+Accept friend request
 
 #### DELETE `/users/friends/:friendshipId/decline`
 Decline friend request
 
 #### DELETE `/users/friends/:friendId`
 Remove friend
+
+#### GET `/users/groups`
+Get all groups for the current user
+
+### Tab Service (localhost:3003)
+
+#### GET `/tabs`
+Get all tabs (supports status/category filtering)
+
+#### POST `/tabs`
+Create a new personal or group tab
+
+#### GET `/tabs/balance/:address`
+Fetch USDC balance from Movement Network for a specific wallet address
+- Primary: Indexer
+- Fallback: Direct Move View Function
+
+#### POST `/tabs/:tabId/settle`
+Verify and record a settlement payment
 
 ## Testing
 
@@ -361,9 +348,4 @@ Kubernetes manifests coming soon.
 3. Submit PR with description
 
 ## License
-
-Proprietary - All rights reserved
-
-## Support
-
-For issues, contact: support@ghosttab.app
+MIT
