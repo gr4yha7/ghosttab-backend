@@ -18,23 +18,23 @@ export class StreamService {
   async createTabChannel(
     tabId: string,
     tabTitle: string,
-    creatorId: string,
-    participantIds: string[]
+    creatorStreamId: string,
+    participantStreamIds: string[]
   ): Promise<string> {
     try {
       const client = getStreamClient();
-      
+
       const channelId = `tab_${tabId}`;
       const channel = client.channel('messaging', channelId, {
         name: tabTitle,
-        created_by_id: creatorId,
-        members: [creatorId, ...participantIds],
+        created_by_id: creatorStreamId,
+        members: [creatorStreamId, ...participantStreamIds],
         tab_id: tabId,
       });
 
       await channel.create();
 
-      logger.info('Stream channel created', { tabId, channelId, members: participantIds.length + 1 });
+      logger.info('Stream channel created', { tabId, channelId, members: participantStreamIds.length + 1 });
 
       return channelId;
     } catch (error) {
@@ -112,7 +112,7 @@ export class StreamService {
       const client = getStreamClient();
       const channel = client.channel('messaging', channelId);
       await channel.watch();
-      
+
       return channel;
     } catch (error) {
       logger.error('Failed to get channel', { channelId, error });
