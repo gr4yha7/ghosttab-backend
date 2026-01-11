@@ -19,7 +19,7 @@ export class NotificationController {
       });
 
       return sendSuccess(res, {
-        notifications: result.notifications,
+        data: result.notifications,
         total: result.total,
         page: page ? parseInt(page as string, 10) : 1,
         limit: limit ? parseInt(limit as string, 10) : 20,
@@ -116,9 +116,9 @@ export class NotificationController {
       const { notifications } = req.body;
       await notificationService.sendBulkNotifications(notifications);
 
-      return sendCreated(res, { 
+      return sendCreated(res, {
         message: 'Notifications sent',
-        count: notifications.length 
+        count: notifications.length
       });
     } catch (error) {
       next(error);

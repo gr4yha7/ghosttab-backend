@@ -38,7 +38,10 @@ export class NotificationService {
     }
 
     return {
-      notifications: data || [],
+      notifications: (data || []).map((n: any) => ({
+        ...n,
+        createdAt: n.created_at,
+      })),
       total: count || 0,
     };
   }
