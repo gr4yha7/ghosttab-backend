@@ -2,6 +2,31 @@ import { logger, NotFoundError, supabase } from "@ghosttab/common";
 
 export class TrustScoreService {
   // Calculate trust score based on settlement behavior
+  private calculateScoreFromStats(stats: {
+    settlements_on_time: number;
+    settlements_late: number;
+    total_settlements: number;
+  }): number {
+    if (stats.total_settlements === 0) return 100;
+
+    // Base score: 100
+    // Lose 10 points for each late settlement
+    // Gain 5 points for every 10 on-time settlements (capped)
+    const baseScore = 100;
+    const latePenalty = (stats.settlements_late || 0) * 10;
+    const onTimeBonus = Math.min(
+      Math.floor((stats.settlements_on_time || 0) / 10) * 5,
+      50 // Max bonus
+    );
+
+    const score = Math.max(
+      0,
+      Math.min(150, baseScore - latePenalty + onTimeBonus)
+    );
+
+    return score;
+  }
+
   async calculateTrustScore(userId: string): Promise<number> {
     const { data: user, error } = await supabase
       .from('users')
@@ -12,33 +37,20 @@ export class TrustScoreService {
     if (error || !user) {
       throw new NotFoundError('User');
     }
-    
-    if (user.total_settlements === 0) return 100;
-    
-    const onTimeRate = (user.settlements_on_time ?? 0) / (user.total_settlements ?? 0);
-    
-    // Base score: 100
-    // Lose 10 points for each late settlement
-    // Gain 5 points for every 10 on-time settlements (capped)
-    const baseScore = 100;
-    const latePenalty = user.settlements_late ?? 0 * 10;
-    const onTimeBonus = Math.min(
-      Math.floor(user.settlements_on_time ?? 0 / 10) * 5,
-      50 // Max bonus
-    );
-    
-    const score = Math.max(
-      0,
-      Math.min(150, baseScore - latePenalty + onTimeBonus)
-    );
-    
-    return score;
+
+    return this.calculateScoreFromStats({
+      settlements_on_time: user.settlements_on_time || 0,
+      settlements_late: user.settlements_late || 0,
+      total_settlements: user.total_settlements || 0,
+    });
   }
-  
+
   async updateTrustScore(
     userId: string,
     onTime: boolean,
-    daysLate: number
+    daysLate: number,
+    tabId?: string,
+    penaltyAmount?: number
   ): Promise<void> {
     const { data: user, error } = await supabase
       .from('users')
@@ -49,36 +61,51 @@ export class TrustScoreService {
     if (error || !user) {
       throw new NotFoundError('User');
     }
-    
+
     const scoreBefore = user.trust_score;
-    
+
     // Update counters
-    const updates = {
-      total_settlements: user.total_settlements ?? 0 + 1,
-      settlements_on_time: user.settlements_on_time ?? 0 + (onTime ? 1 : 0),
-      settlements_late: user.settlements_late ?? 0 + (onTime ? 0 : 1),
+    const stats = {
+      total_settlements: (user.total_settlements || 0) + 1,
+      settlements_on_time: (user.settlements_on_time || 0) + (onTime ? 1 : 0),
+      settlements_late: (user.settlements_late || 0) + (onTime ? 0 : 1),
     };
-    
-    // Calculate new score
-    const scoreAfter = await this.calculateTrustScore(userId);
-    
+
+    // Calculate new score using UPDATED stats
+    const scoreAfter = this.calculateScoreFromStats(stats);
+
+    // 1. Update user profile
     await supabase
       .from('users')
       .update({
-        ...updates,
+        ...stats,
         trust_score: scoreAfter,
       })
       .eq('id', userId);
-    
-    logger.info('Trust score updated', {
+
+    // 2. Record in settlement history
+    await supabase
+      .from('settlement_history')
+      .insert({
+        user_id: userId,
+        tab_id: tabId,
+        settled_on_time: onTime,
+        days_late: daysLate,
+        penalty_amount: penaltyAmount || 0,
+        trust_score_before: scoreBefore,
+        trust_score_after: scoreAfter,
+      });
+
+    logger.info('Trust score updated and history recorded', {
       userId,
+      tabId,
       scoreBefore,
       scoreAfter,
       onTime,
       daysLate,
     });
   }
-  
+
   // Get trust score tier
   getTrustTier(score: number): {
     tier: string;
