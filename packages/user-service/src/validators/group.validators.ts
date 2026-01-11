@@ -51,6 +51,9 @@ export const getUserGroupsSchema = z.object({
 });
 
 export const getGroupTabsSchema = z.object({
+  params: z.object({
+    groupId: uuidSchema,
+  }),
   query: z.object({
     status: z.enum(['OPEN', 'SETTLED', 'CANCELLED']).optional(),
     ...paginationSchema.shape,
