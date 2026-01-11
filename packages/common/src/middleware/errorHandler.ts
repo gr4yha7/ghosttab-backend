@@ -13,6 +13,7 @@ export const errorHandler = (
   // Log the error
   logger.error('Error occurred', {
     error: err.message,
+    details: err instanceof AppError ? err.details : (err instanceof ZodError ? err.errors : undefined),
     stack: err.stack,
     path: req.path,
     method: req.method,
