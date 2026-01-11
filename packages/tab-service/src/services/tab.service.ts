@@ -12,6 +12,7 @@ import { streamService } from './stream.service';
 import { blockchainService } from './blockchain.service';
 import { otpService } from './otp.service';
 import { trustScoreService } from './trustscore.service';
+import { config } from '../config';
 
 interface CreateTabData {
   title: string;
@@ -23,6 +24,18 @@ interface CreateTabData {
     userId: string;
     shareAmount?: number; // If null, split equally
   }>;
+  settlementDeadline?: Date; // Optional deadline
+  settlementWallet?: string; // Optional settlement wallet
+  penaltyRate?: number; // Default 5%
+  autoSettle?: boolean; // Auto-settle after deadline
+}
+
+interface CreateGroupTabData {
+  title: string;
+  description?: string;
+  category?: TabCategory;
+  totalAmount: number;
+  currency?: string;
   settlementDeadline?: Date; // Optional deadline
   settlementWallet?: string; // Optional settlement wallet
   penaltyRate?: number; // Default 5%
@@ -43,7 +56,9 @@ export class TabService {
     }
 
     // Check all participants are friends with creator
-    const participantIds = participants.map((p) => p.userId);
+    const participantIds = participants
+      .map((p) => p.userId)
+      .filter((id) => id !== creatorId); // Filter out creator if included
     const { data: friendships, error: friendError } = await supabase
       .from('friendships')
       .select('friend_id')
@@ -55,7 +70,7 @@ export class TabService {
       throw new Error('Failed to verify friendships');
     }
 
-    const friendIds = new Set(friendships.map((f: {friend_id: string}) => f.friend_id));
+    const friendIds = new Set(friendships.map((f: { friend_id: string }) => f.friend_id));
     const nonFriends = participantIds.filter((id) => !friendIds.has(id));
 
     if (nonFriends.length > 0) {
@@ -70,22 +85,23 @@ export class TabService {
 
     if (hasCustomShares) {
       // Use custom shares
-      const shareSum = participants.reduce(
-        (sum, p) => sum.plus(new Decimal(p.shareAmount || 0)),
+      calculatedShares = participants.map((p) => ({
+        userId: p.userId,
+        shareAmount: p.shareAmount!,
+      }));
+
+      const shareSum = calculatedShares.reduce(
+        (sum, p) => sum.plus(new Decimal(p.shareAmount)),
         new Decimal(0)
       );
 
       if (!shareSum.equals(total)) {
         throw new ValidationError('Share amounts must equal total amount');
       }
-
-      calculatedShares = participants.map((p) => ({
-        userId: p.userId,
-        shareAmount: p.shareAmount!,
-      }));
     } else {
-      // Split equally (including creator)
-      const allParticipants = [creatorId, ...participantIds];
+      // Split equally among provided participants
+      // If creator is not in participants, they are not part of the split
+      const allParticipants = participants.map(p => p.userId);
       const shareAmount = total.dividedBy(allParticipants.length).toNumber();
 
       calculatedShares = allParticipants.map((userId) => ({
@@ -101,9 +117,9 @@ export class TabService {
       .eq('id', creatorId)
       .single();
 
-      if (creatorError || !creator) {
-        throw new Error('Failed to get creator info');
-      }
+    if (creatorError || !creator) {
+      throw new Error('Failed to get creator info');
+    }
 
     // Create tab
     const { data: tab, error: tabError } = await supabase
@@ -138,6 +154,7 @@ export class TabService {
           user_id: share.userId,
           share_amount: share.shareAmount,
           paid: false,
+          verified: share.userId === creatorId, // Creator is auto-verified
         }))
       );
 
@@ -150,11 +167,14 @@ export class TabService {
 
     // Create GetStream channel
     try {
+      const allMembers = [creatorId, ...participantIds];
+      const walletMap = await this.resolveWalletAddresses(allMembers);
+
       const channelId = await streamService.createTabChannel(
         tab.id,
         title,
-        creatorId,
-        participantIds
+        walletMap[creatorId],
+        participantIds.map(id => walletMap[id])
       );
 
       // Update tab with channel ID
@@ -178,34 +198,38 @@ export class TabService {
     for (const participantId of participantIds) {
       const share = calculatedShares.find((s) => s.userId === participantId);
       const { data: participant } = await supabase
-      .from('users')
-      .select('email, username')
-      .eq('id', participantId)
-      .single();
-    
+        .from('users')
+        .select('email, username')
+        .eq('id', participantId)
+        .single();
+
       if (!participant?.email) {
         throw new ValidationError(
           `Participant ${participant?.username} has no email`
         );
       }
-      
-      // Create OTP for tab participation
-      await otpService.createAndSendOTP(
-        participant.email,
-        'TAB_PARTICIPATION',
-        {
-          tabId: tab.id,
-          tabTitle: title,
-          shareAmount: share?.shareAmount,
-          currency,
-          creatorId,
-        }
-      );
+
+      // Create OTP for tab participation - SKIP for creator
+      if (participantId !== creatorId) {
+        await otpService.createAndSendOTP(
+          participant.email,
+          'TAB_PARTICIPATION',
+          {
+            tabId: tab.id,
+            tabTitle: title,
+            shareAmount: share?.shareAmount,
+            currency,
+            creatorId,
+          }
+        );
+      }
+
+      const notificationBody = `${creator?.username || creator?.email} invited you to join '${title}' tab. Click to accept or decline.`;
 
       await publishNotification(participantId, {
         type: 'TAB_CREATED',
         title: 'New Tab Created',
-        body: `${creator?.username || creator?.email} created "${title}" - You owe ${currency} ${share?.shareAmount}`,
+        body: notificationBody,
         data: {
           tabId: tab.id,
           creatorId,
@@ -218,7 +242,7 @@ export class TabService {
         user_id: participantId,
         type: 'TAB_CREATED',
         title: 'New Tab Created',
-        body: `${creator?.username || creator?.email} created "${title}"`,
+        body: notificationBody,
         data: {
           tabId: tab.id,
           creatorId,
@@ -242,7 +266,7 @@ export class TabService {
   async createGroupTab(
     userId: string,
     groupId: string,
-    tabData: CreateTabData
+    tabData: CreateGroupTabData
   ): Promise<any> {
     // Verify user is admin or creator
     const { data: member } = await supabase
@@ -251,35 +275,34 @@ export class TabService {
       .eq('group_id', groupId)
       .eq('user_id', userId)
       .single();
-    
+
     if (!member || !['CREATOR', 'ADMIN'].includes(member.role)) {
       throw new ForbiddenError('Only admins can create group tabs');
     }
-    
+
     // Get all group members
     const { data: members } = await supabase
       .from('group_members')
       .select('user_id')
       .eq('group_id', groupId);
-    
-    const memberIds = members?.map((m: {user_id: string}) => m.user_id) || [];
-    
+
+    const memberIds = members?.map((m: { user_id: string }) => m.user_id) || [];
+
     // Create tab with group_id
     const tab = await this.createTab(userId, {
       ...tabData,
       participants: memberIds
-        .filter((id: string) => id !== userId)
         .map((id: string) => ({ userId: id })),
     });
-    
+
     // Link tab to group
     await supabase
       .from('tabs')
       .update({ group_id: groupId })
       .eq('id', tab.id);
-    
+
     logger.info('Group tab created', { groupId, tabId: tab.id, creatorId: userId });
-    
+
     return tab;
   }
 
@@ -297,6 +320,7 @@ export class TabService {
           paid_amount,
           paid_tx_hash,
           paid_at,
+          verified,
           user:user_id (id, username, email, avatar_url, wallet_address)
         )
       `)
@@ -307,18 +331,20 @@ export class TabService {
       throw new NotFoundError('Tab');
     }
 
-    // Check if user is a participant
+    // Check if user is a participant OR the creator
+    const isCreator = tab.creator_id === userId;
     const isParticipant = (tab.participants as any[]).some(
       (p: any) => p.user.id === userId
     );
 
-    if (!isParticipant) {
+    if (!isParticipant && !isCreator) {
       throw new ForbiddenError('You are not a participant in this tab');
     }
 
     // Calculate totals
     const participants = (tab.participants as any[]).map((p: any) => ({
       id: p.id,
+      userId: p.user.id,
       user: {
         id: p.user.id,
         username: p.user.username,
@@ -328,6 +354,7 @@ export class TabService {
       },
       shareAmount: p.share_amount,
       paid: p.paid,
+      verified: p.verified,
       paidAmount: p.paid_amount,
       paidTxHash: p.paid_tx_hash,
       paidAt: p.paid_at,
@@ -348,6 +375,8 @@ export class TabService {
       totalAmount: tab.total_amount,
       currency: tab.currency,
       status: tab.status,
+      settlementDeadline: tab.settlement_deadline,
+      penaltyRate: tab.penalty_rate,
       streamChannelId: tab.stream_channel_id,
       createdAt: tab.created_at,
       updatedAt: tab.updated_at,
@@ -371,16 +400,15 @@ export class TabService {
     userId: string,
     filters: {
       status?: 'OPEN' | 'SETTLED' | 'CANCELLED';
-      category?: string; // Filter by category
-      search?: string; // Search by title
+      category?: string;
+      search?: string;
       page?: number;
       limit?: number;
     }
-  ): Promise<{ tabs: any[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     const { status, category, search, page = 1, limit = 20 } = filters;
     const offset = (page - 1) * limit;
 
-    // Get tabs where user is a participant
     let query = supabase
       .from('tab_participants')
       .select(`
@@ -392,27 +420,23 @@ export class TabService {
           total_amount,
           currency,
           status,
+          settlement_deadline,
+          penalty_rate,
           created_at,
           creator:creator_id (id, username, email, avatar_url)
         ),
         share_amount,
-        paid
-      `)
+        paid,
+        verified
+      `, { count: 'exact' })
       .eq('user_id', userId);
 
-    // Apply filters
     if (category) {
       query = query.eq('tab.category', category);
     }
-    
+
     if (search) {
       query = query.ilike('tab.title', `%${search}%`);
-    }
-
-    if (status) {
-      // We need to filter by tab status - this is a bit tricky with the current query
-      // For now, we'll fetch all and filter in memory
-      // In production, consider a database view or function
     }
 
     const { data: tabParticipants, error, count } = await query
@@ -426,34 +450,39 @@ export class TabService {
 
     const tabs = (tabParticipants || [])
       .filter((tp: any) => tp.tab && (!status || tp.tab.status === status))
-      .map((tp: any) => ({
-        id: tp.tab.id,
-        title: tp.tab.title,
-        description: tp.tab.description,
-        category: tp.tab.category,
-        totalAmount: tp.tab.total_amount,
-        currency: tp.tab.currency,
-        status: tp.tab.status,
-        createdAt: tp.tab.created_at,
-        creator: {
-          id: tp.tab.creator.id,
-          username: tp.tab.creator.username,
-          email: tp.tab.creator.email,
-          avatarUrl: tp.tab.creator.avatar_url,
-        },
-        userShare: tp.share_amount,
-        userPaid: tp.paid,
-      }));
+      .map((tp: any) => {
+        const tab = tp.tab;
+        return {
+          id: tab.id,
+          title: tab.title,
+          description: tab.description,
+          category: tab.category,
+          totalAmount: tab.total_amount,
+          currency: tab.currency,
+          status: tab.status,
+          settlementDeadline: tab.settlement_deadline,
+          penaltyRate: tab.penalty_rate,
+          createdAt: tab.created_at,
+          creator: {
+            id: tab.creator.id,
+            username: tab.creator.username,
+            email: tab.creator.email,
+            avatarUrl: tab.creator.avatar_url,
+          },
+          userShare: tp.share_amount,
+          userPaid: tp.paid,
+          userVerified: tp.verified,
+        };
+      });
 
     return {
-      tabs,
+      data: tabs,
       total: count || tabs.length,
       page,
       limit,
     };
   }
 
-  // Get category statistics
   async getCategoryStats(userId: string): Promise<any> {
     const { data } = await supabase
       .from('tab_participants')
@@ -461,8 +490,8 @@ export class TabService {
         tab:tab_id (category, total_amount, status)
       `)
       .eq('user_id', userId);
-    
-    const stats = data && data.reduce((acc: Record<string, {count: number, totalAmount: Decimal}>, item: any) => {
+
+    const stats = data && data.reduce((acc: Record<string, { count: number, totalAmount: Decimal }>, item: any) => {
       const category = item.tab?.category as TabCategory;
       if (!acc[category]) {
         acc[category] = {
@@ -503,38 +532,38 @@ export class TabService {
       throw new ValidationError('Payment already settled');
     }
 
-    if (participant.tab && participant.tab.settlement_deadline) {
-      // Calculate if late and penalty
-      const now = new Date();
-      const deadline = new Date(participant.tab.settlement_deadline);
-      const isLate = now > deadline;
-      const daysLate = isLate 
-        ? Math.ceil((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24)) 
-        : 0;
-      
-      const penaltyAmount = isLate && participant.tab.penalty_rate as number > 0
-        ? new Decimal(participant.share_amount)
-            .times(participant.tab?.penalty_rate as number)
-            .dividedBy(100)
-        : new Decimal(0);
-      
-      const finalAmount = new Decimal(participant.share_amount)
-        .plus(penaltyAmount);
-      
-      // Verify paid amount includes penalty
-      if (new Decimal(data.amount).lessThan(finalAmount)) {
-        throw new ValidationError(
-          `Payment must include penalty. Required: ${finalAmount}, Received: ${data.amount}`
-        );
-      }
+    // Calculate if late and penalty
+    const now = new Date();
+    const deadline = participant.tab?.settlement_deadline ? new Date(participant.tab.settlement_deadline) : null;
+    const isLate = deadline ? now > deadline : false;
+    const daysLate = isLate && deadline
+      ? Math.ceil((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
 
-      // Update participant with penalty info
-      await supabase
+    const penaltyAmount = isLate && participant.tab?.penalty_rate as number > 0
+      ? new Decimal(participant.share_amount)
+        .times(participant.tab?.penalty_rate as number)
+        .dividedBy(100)
+      : new Decimal(0);
+
+    const finalAmount = new Decimal(participant.share_amount)
+      .plus(penaltyAmount);
+
+    // Verify paid amount includes penalty
+    if (new Decimal(data.amount).lessThan(finalAmount)) {
+      throw new ValidationError(
+        `Payment must include penalty. Required: ${finalAmount}, Received: ${data.amount}`
+      );
+    }
+
+    // Update participant with payment info
+    await supabase
       .from('tab_participants')
       .update({
         paid: true,
         paid_amount: data.amount,
         paid_tx_hash: data.txHash,
+        paid_at: now.toISOString(),
         settled_early: !isLate,
         days_late: daysLate,
         penalty_amount: penaltyAmount.toNumber(),
@@ -542,10 +571,17 @@ export class TabService {
       })
       .eq('id', participant.id);
 
-      // Update trust score
-      await trustScoreService.updateTrustScore(userId, isLate, daysLate);
-    }
+    // Update trust score and record history
+    await trustScoreService.updateTrustScore(
+      userId,
+      !isLate,
+      daysLate,
+      tabId,
+      penaltyAmount.toNumber()
+    );
 
+    // Extract tab data for verification
+    const tab = participant.tab as any;
 
     // Verify transaction on blockchain
     try {
@@ -555,13 +591,83 @@ export class TabService {
         throw new ValidationError('Transaction not confirmed on blockchain');
       }
 
-      // Additional verification: check amount and addresses if needed
-      // if (verification.amount !== amount) {
-      //   throw new ValidationError('Transaction amount mismatch');
-      // }
-    } catch (error) {
-      logger.error('Transaction verification failed', { txHash, error });
-      throw new ValidationError('Failed to verify transaction');
+      // Verify transaction amount matches expected payment (exact amounts only)
+      // Round both to 6 decimal places to handle precision issues with split payments
+      const expectedAmount = new Decimal(participant.share_amount).toDecimalPlaces(6, Decimal.ROUND_HALF_UP);
+
+      if (!verification.amount) {
+        throw new ValidationError('Transaction amount not found in blockchain data');
+      }
+
+      // Convert from Octas (1 APT = 100,000,000 Octas)
+      const actualAmount = new Decimal(verification.amount).dividedBy(1e6).toDecimalPlaces(6, Decimal.ROUND_HALF_UP);
+
+      if (!actualAmount.equals(expectedAmount)) {
+        throw new ValidationError(
+          `Transaction amount mismatch. Expected: ${expectedAmount.toFixed(6)} ${tab.currency}, Got: ${actualAmount.toFixed(6)} ${tab.currency}`
+        );
+      }
+
+      // Verify sender wallet address
+      const { data: user } = await supabase
+        .from('users')
+        .select('wallet_address')
+        .eq('id', userId)
+        .single();
+
+      if (user?.wallet_address && verification.fromAddress) {
+        // Normalize addresses for comparison (case-insensitive)
+        const normalizedUserAddress = user.wallet_address.toLowerCase();
+        const normalizedTxAddress = verification.fromAddress.toLowerCase();
+
+        if (normalizedUserAddress !== normalizedTxAddress) {
+          throw new ValidationError(
+            `Transaction sender address mismatch. Expected: ${user.wallet_address}, Got: ${verification.fromAddress}`
+          );
+        }
+      }
+
+      // Optionally verify recipient address (creator's wallet)
+      // const { data: creator } = await supabase
+      //   .from('users')
+      //   .select('wallet_address')
+      //   .eq('id', tab.creator_id)
+      //   .single();
+
+      if (verification.toAddress) {
+        const normalizedCreatorAddress = config.movement.ghosttabSettlementAddress.toLowerCase();
+        const normalizedTxToAddress = verification.toAddress.toLowerCase();
+
+        if (normalizedCreatorAddress !== normalizedTxToAddress) {
+          throw new ValidationError(
+            `Transaction recipient address mismatch. Expected: ${config.movement.ghosttabSettlementAddress}, Got: ${verification.toAddress}`
+          );
+        }
+      }
+
+      logger.info('Transaction verified successfully', {
+        txHash,
+        from: verification.fromAddress,
+        to: verification.toAddress,
+        amount: actualAmount.toFixed(8),
+        blockNumber: verification.blockNumber
+      });
+
+    } catch (error: any) {
+      logger.error('Transaction verification failed', {
+        txHash,
+        userId,
+        tabId,
+        error: error?.message || error
+      });
+
+      // Re-throw ValidationError as-is for specific error messages
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+
+      // Wrap other errors
+      throw new ValidationError(`Failed to verify transaction: ${error?.message || 'Unknown error'}`);
     }
 
     // Update participant as paid
@@ -581,7 +687,6 @@ export class TabService {
     }
 
     // Record transaction
-    const tab = participant.tab as any;
     await supabase.from('transactions').insert({
       tab_id: tabId,
       from_user_id: userId,
@@ -637,7 +742,7 @@ export class TabService {
       .select('paid')
       .eq('tab_id', tabId);
 
-    const allPaid = allParticipants?.every((p: { paid: boolean | null}) => p.paid);
+    const allPaid = allParticipants?.every((p: { paid: boolean | null }) => p.paid);
 
     if (allPaid) {
       // Mark tab as settled
@@ -777,11 +882,38 @@ export class TabService {
     if (tab.stream_channel_id) {
       await streamService.sendSystemMessage(
         tab.stream_channel_id,
-        `Tab has been cancelled by the creator.`
+        'Tab has been cancelled by the creator.'
       );
     }
 
     logger.info('Tab cancelled', { tabId, userId });
+  }
+
+  private async resolveWalletAddresses(userIds: string[]): Promise<Record<string, string>> {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, wallet_address')
+      .in('id', userIds);
+
+    if (error || !users) {
+      logger.error('Failed to resolve wallet addresses', { userIds, error });
+      throw new Error('Failed to resolve identifiers for chat');
+    }
+
+    const walletMap: Record<string, string> = {};
+    users.forEach(u => {
+      walletMap[u.id] = u.wallet_address;
+    });
+
+    // Verify all IDs were resolved
+    userIds.forEach(id => {
+      if (!walletMap[id]) {
+        logger.error('User wallet not found', { userId: id });
+        throw new Error(`Profile for user ${id} is incomplete`);
+      }
+    });
+
+    return walletMap;
   }
 
   async verifyTabParticipation(
@@ -795,27 +927,27 @@ export class TabService {
       .select('email')
       .eq('id', userId)
       .single();
-    
+
     if (!user?.email) {
       throw new ValidationError('Email required for verification');
     }
-    
+
     // Verify OTP
     const verification = await otpService.verifyOTP(
       user.email,
       otpCode,
       'TAB_PARTICIPATION'
     );
-    
+
     if (!verification.valid) {
       throw new ValidationError('Invalid or expired OTP');
     }
-    
+
     // Check metadata matches
     if (verification.metadata.tabId !== tabId) {
       throw new ValidationError('OTP does not match this tab');
     }
-    
+
     if (accept) {
       // Accept participation
       await supabase
@@ -823,7 +955,7 @@ export class TabService {
         .update({ verified: true })
         .eq('tab_id', tabId)
         .eq('user_id', userId);
-      
+
       logger.info('Tab participation accepted', { tabId, userId });
     } else {
       // Decline participation - remove from tab
@@ -832,14 +964,14 @@ export class TabService {
         .delete()
         .eq('tab_id', tabId)
         .eq('user_id', userId);
-      
+
       // Recalculate shares for remaining participants
       await this.recalculateShares(tabId);
-      
+
       logger.info('Tab participation declined', { tabId, userId });
     }
   }
-  
+
   // Helper to recalculate shares if someone declines
   async recalculateShares(tabId: string): Promise<void> {
     const { data: tab, error } = await supabase
@@ -851,7 +983,7 @@ export class TabService {
     if (!tab || error) {
       throw new NotFoundError('Tab');
     }
-    
+
     const { data: participants, error: tabParticipantsError } = await supabase
       .from('tab_participants')
       .select('id')
@@ -860,14 +992,66 @@ export class TabService {
     if (!participants || tabParticipantsError) {
       throw new NotFoundError('Tab Participants');
     }
-    
+
     const newShareAmount = new Decimal(tab.total_amount)
       .dividedBy(participants.length);
-    
+
     await supabase
       .from('tab_participants')
       .update({ share_amount: newShareAmount.toNumber() })
       .eq('tab_id', tabId);
+  }
+
+  async resendOTP(userId: string, tabId: string): Promise<void> {
+    // Get tab participant
+    const { data: participant, error: participantError } = await supabase
+      .from('tab_participants')
+      .select('*, tab:tab_id(id, title, currency)')
+      .eq('tab_id', tabId)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant) {
+      throw new NotFoundError('Tab participant');
+    }
+
+    if (participant.verified) {
+      // Logic: Already verified participants don't need a resend.
+      return;
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
+    if (!user || !user.email) {
+      throw new ValidationError('User email not found');
+    }
+
+    const tab = participant.tab as any;
+
+    // Create and send OTP
+    await otpService.createAndSendOTP(
+      user.email,
+      'TAB_PARTICIPATION',
+      {
+        tabId: tab.id,
+        tabTitle: tab.title,
+        shareAmount: participant.share_amount,
+        currency: tab.currency,
+        userId: userId,
+      }
+    );
+
+    // Update sent_at
+    await supabase
+      .from('tab_participants')
+      .update({ otp_sent_at: new Date().toISOString() })
+      .eq('id', participant.id);
+
+    logger.info('OTP resent to participant', { userId, tabId });
   }
 }
 
