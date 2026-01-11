@@ -24,7 +24,7 @@ export class GroupController {
 
       const { groupId } = req.params;
       const group = await groupService.getGroupById(req.user.id, groupId);
-      
+
       return sendSuccess(res, { group });
     } catch (error) {
       next(error);
@@ -43,7 +43,7 @@ export class GroupController {
         page: page ? parseInt(page as string, 10) : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
       });
-      
+
       return sendSuccess(res, result);
     } catch (error) {
       next(error);
@@ -58,7 +58,7 @@ export class GroupController {
 
       const { groupId } = req.params;
       const group = await groupService.updateGroup(req.user.id, groupId, req.body);
-      
+
       return sendSuccess(res, { group });
     } catch (error) {
       next(error);
@@ -72,8 +72,8 @@ export class GroupController {
       }
 
       const { groupId } = req.params;
-      await groupService.addMembers(req.user.id, groupId, req.body);
-      
+      await groupService.addMembers(req.user.id, groupId, req.body.memberIds);
+
       return sendSuccess(res, { message: 'Members added' });
     } catch (error) {
       next(error);
@@ -88,7 +88,7 @@ export class GroupController {
 
       const { groupId, memberId } = req.params;
       await groupService.removeMember(req.user.id, groupId, memberId);
-      
+
       return sendSuccess(res, { message: 'Member removed' });
     } catch (error) {
       next(error);
@@ -103,7 +103,7 @@ export class GroupController {
 
       const { groupId, memberId } = req.params;
       await groupService.makeAdmin(req.user.id, groupId, memberId);
-      
+
       return sendSuccess(res, { message: 'Member promoted to admin' });
     } catch (error) {
       next(error);
@@ -118,7 +118,7 @@ export class GroupController {
 
       const { groupId, adminId } = req.params;
       await groupService.removeAdmin(req.user.id, groupId, adminId);
-      
+
       return sendSuccess(res, { message: 'Admin demoted to member' });
     } catch (error) {
       next(error);
@@ -136,7 +136,7 @@ export class GroupController {
         page: parseInt(req.query.page as string) || 1,
         limit: parseInt(req.query.limit as string) || 20,
       });
-      
+
       return sendSuccess(res, result);
     } catch (error) {
       next(error);
@@ -151,7 +151,7 @@ export class GroupController {
 
       const { groupId } = req.params;
       await groupService.leaveGroup(req.user.id, groupId);
-      
+
       return sendSuccess(res, { message: 'Left group' });
     } catch (error) {
       next(error);
@@ -166,7 +166,7 @@ export class GroupController {
 
       const { groupId } = req.params;
       await groupService.deleteGroup(req.user.id, groupId);
-      
+
       return sendSuccess(res, { message: 'Group deleted' });
     } catch (error) {
       next(error);
