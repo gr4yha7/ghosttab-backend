@@ -37,11 +37,11 @@ export class UserController {
 
       const { autoSettle, vaultAddress } = req.body;
       await userService.updateAutoSettle(req.user.id, autoSettle, vaultAddress);
-      
-      return sendSuccess(res, { 
+
+      return sendSuccess(res, {
         message: 'Auto-settle settings updated',
         autoSettle,
-        vaultAddress 
+        vaultAddress
       });
     } catch (error) {
       next(error);
@@ -56,7 +56,7 @@ export class UserController {
 
       const { q } = req.query;
       const users = await userService.searchUsers(q as string, req.user.id);
-      
+
       return sendSuccess(res, { users, total: users.length });
     } catch (error) {
       next(error);
@@ -71,8 +71,8 @@ export class UserController {
 
       const { status } = req.query;
       const friends = await userService.getFriends(req.user.id, status as FriendshipStatus);
-      
-      return sendSuccess(res, { friends, total: friends.length });
+
+      return sendSuccess(res, { data: friends, total: friends.length });
     } catch (error) {
       next(error);
     }
@@ -85,8 +85,8 @@ export class UserController {
       }
 
       const requests = await userService.getPendingRequests(req.user.id);
-      
-      return sendSuccess(res, { requests, total: requests.length });
+
+      return sendSuccess(res, { data: requests, total: requests.length });
     } catch (error) {
       next(error);
     }
@@ -116,9 +116,9 @@ export class UserController {
         throw new Error('User not authenticated');
       }
 
-      const { friendshipId } = req.params;      
+      const { friendshipId } = req.params;
       await userService.acceptFriendRequest(req.user.id, friendshipId);
-      
+
       return sendSuccess(res, { message: 'Friend request accepted' });
     } catch (error) {
       next(error);
@@ -133,7 +133,7 @@ export class UserController {
 
       const { friendshipId } = req.params;
       await userService.declineFriendRequest(req.user.id, friendshipId);
-      
+
       return sendSuccess(res, { message: 'Friend request declined' });
     } catch (error) {
       next(error);
@@ -148,7 +148,7 @@ export class UserController {
 
       const { friendId } = req.params;
       await userService.removeFriend(req.user.id, friendId);
-      
+
       return sendSuccess(res, { message: 'Friend removed' });
     } catch (error) {
       next(error);

@@ -24,7 +24,7 @@ export class StreamService {
   ): Promise<string> {
     try {
       const client = getStreamClient();
-      
+
       const channelId = `group_${groupId}`;
       const channel = client.channel('messaging', channelId, {
         name: groupName,
@@ -33,15 +33,15 @@ export class StreamService {
         group_id: groupId,
         channel_type: 'group',
       });
-  
+
       await channel.create();
-  
-      logger.info('Group channel created', { 
-        groupId, 
-        channelId, 
-        members: memberIds.length + 1 
+
+      logger.info('Group channel created', {
+        groupId,
+        channelId,
+        members: memberIds.length + 1
       });
-  
+
       return channelId;
     } catch (error) {
       logger.error('Failed to create group channel', { groupId, error });
@@ -118,7 +118,7 @@ export class StreamService {
       const client = getStreamClient();
       const channel = client.channel('messaging', channelId);
       await channel.watch();
-      
+
       return channel;
     } catch (error) {
       logger.error('Failed to get channel', { channelId, error });
