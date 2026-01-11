@@ -5,13 +5,24 @@
     "rootDir": "./src",
     "baseUrl": "./src",
     "paths": {
-      "@ghosttab/common": ["../../common/src"],
-      "@ghosttab/common/*": ["../../common/src/*"]
+      "@ghosttab/common": [
+        "../../common/src"
+      ],
+      "@ghosttab/common/*": [
+        "../../common/src/*"
+      ]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"],
+  "include": [
+    "src/**/*",
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
   "references": [
-    { "path": "../common" }
+    {
+      "path": "../common"
+    }
   ]
 }
