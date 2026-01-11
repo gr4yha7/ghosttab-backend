@@ -2,7 +2,12 @@ import { z } from 'zod';
 
 export const emailSchema = z.string().email('Invalid email address');
 
-export const uuidSchema = z.string().uuid('Invalid UUID format');
+export const uuidSchema = z.string().refine(
+  (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val) || val.startsWith('did:privy:'),
+  {
+    message: 'Invalid ID format (must be UUID or Privy DID)',
+  }
+);
 
 export const walletAddressSchema = z
   .string()
