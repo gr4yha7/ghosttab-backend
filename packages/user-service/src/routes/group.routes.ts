@@ -13,7 +13,7 @@ import {
   groupIdParamMemberIdParamSchema,
 } from '../validators/group.validators';
 
-const router = Router(); 
+const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
@@ -30,14 +30,14 @@ router.post('/', validate(createGroupSchema), groupController.createGroup);
  * @desc    Get user's groups
  * @access  Private
  */
-router.post('/', validate(getUserGroupsSchema), groupController.getUserGroups);
+router.get('/', validate(getUserGroupsSchema), groupController.getUserGroups);
 
 /**
  * @route   GET /:groupId
  * @desc    Get group by ID
  * @access  Private
  */
-router.post('/', validate(groupIdParamSchema), groupController.getGroup);
+router.get('/:groupId', validate(groupIdParamSchema), groupController.getGroup);
 
 /**
  * @route   PATCH /:groupId
