@@ -1,7 +1,5 @@
 import { Response, NextFunction } from 'express';
-import * as jwt from 'jsonwebtoken';
-import { AuthenticatedRequest, UnauthorizedError, verifyPrivyIdToken } from '@ghosttab/common';
-import { config } from '../config';
+import { AuthenticatedRequest, logger, UnauthorizedError, verifyPrivyIdToken } from '@ghosttab/common';
 
 export const authenticate = async (
   req: AuthenticatedRequest,
@@ -26,6 +24,7 @@ export const authenticate = async (
 
     next();
   } catch (error) {
+    logger.error('Authentication failed', { error })
     next(new UnauthorizedError('Invalid or expired token'));
   }
 };
