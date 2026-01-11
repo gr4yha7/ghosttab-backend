@@ -88,6 +88,11 @@ Then restart your IDE's TypeScript server.
 
 ```
 ghosttab-backend/
+├── move_contract/
+│   ├── build/
+│   ├── scripts/ 
+│   ├── sources/
+│   └── tests/  
 ├── packages/
 │   ├── common/              # Shared utilities, types, and configurations
 │   ├── auth-service/        # Authentication and user onboarding
@@ -109,7 +114,7 @@ ghosttab-backend/
 - **Blockchain**: Movement Network (MoveVM)
 - **Notifications**: Upstash Redis Pub/Sub
 - **Chat**: GetStream SDK
-- **Email**: Resend API
+- **Email**: MailGun API
 - **Monorepo**: Turborepo
 
 ## Services
@@ -176,7 +181,7 @@ Required environment variables:
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`
 - `UPSTASH_REDIS_URL`, `UPSTASH_REDIS_TOKEN`
 - `STREAM_API_KEY`, `STREAM_API_SECRET`
-- `RESEND_API_KEY`
+- `MAILGUN_API_KEY`
 - `MOVEMENT_RPC_URL`, `MOVEMENT_CHAIN_ID`
 - `JWT_SECRET`
 
