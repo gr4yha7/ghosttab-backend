@@ -6,13 +6,14 @@ import { errorHandler, notFoundHandler } from '@ghosttab/common';
 import { config } from './config';
 import userRoutes from './routes/user.routes';
 import groupRoutes from './routes/group.routes';
+import analyticsRoutes from './routes/analytics.routes';
 
 export const createApp = (): Application => {
   const app = express();
 
   // Security middleware
   app.use(helmet());
-  
+
   // CORS
   app.use(
     cors({
@@ -38,6 +39,7 @@ export const createApp = (): Application => {
   // Routes
   app.use('/users', userRoutes);
   app.use('/users/groups', groupRoutes);
+  app.use('/users/analytics', analyticsRoutes);
 
   // Root health check
   app.get('/', (req: Request, res: Response) => {
