@@ -1,6 +1,7 @@
 import { logger } from '@ghosttab/common';
 import { createApp } from './app';
 import { config } from './config';
+import { cronService } from './services/cron.service';
 
 const startServer = async () => {
   try {
@@ -11,11 +12,16 @@ const startServer = async () => {
         port: config.port,
         env: config.nodeEnv,
       });
+
+      // Initialize cron jobs
+      cronService.init();
+      logger.info('Cron jobs initialized');
     });
 
     // Graceful shutdown
     const gracefulShutdown = () => {
       logger.info('Received shutdown signal, closing server...');
+      cronService.stop();
       server.close(() => {
         logger.info('Server closed');
         process.exit(0);
