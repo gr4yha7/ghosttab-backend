@@ -1,8 +1,39 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest, sendSuccess, sendCreated, sendNoContent } from '@ghosttab/common';
 import { tabService } from '../services/tab.service';
+import { blockchainService } from '../services/blockchain.service';
 
 export class TabController {
+  async generateHash(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { sender, amount } = req.body;
+      const result = await blockchainService.generateHash(sender, amount);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async submitTransaction(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { rawTxnHex, publicKey, signature } = req.body;
+      const result = await blockchainService.submitSignedTx(rawTxnHex, publicKey, signature);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getUSDCBalance(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { address } = req.params;
+      const balance = await blockchainService.getUSDCBalance(address);
+      return sendSuccess(res, { balance });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async createTab(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       if (!req.user) {
@@ -38,7 +69,7 @@ export class TabController {
 
       const { tabId } = req.params;
       const tab = await tabService.getTabById(req.user.id, tabId);
-      
+
       return sendSuccess(res, { tab });
     } catch (error) {
       next(error);
@@ -57,7 +88,7 @@ export class TabController {
         page: page ? parseInt(page as string, 10) : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
       });
-      
+
       return sendSuccess(res, result);
     } catch (error) {
       next(error);
@@ -72,7 +103,7 @@ export class TabController {
 
       const { tabId } = req.params;
       const tab = await tabService.updateTab(req.user.id, tabId, req.body);
-      
+
       return sendSuccess(res, { tab });
     } catch (error) {
       next(error);
@@ -87,7 +118,7 @@ export class TabController {
 
       const { tabId } = req.params;
       await tabService.settlePayment(req.user.id, tabId, req.body);
-      
+
       return sendSuccess(res, { message: 'Payment settled successfully' });
     } catch (error) {
       next(error);
@@ -102,8 +133,42 @@ export class TabController {
 
       const { tabId } = req.params;
       await tabService.cancelTab(req.user.id, tabId);
-      
+
       return sendSuccess(res, { message: 'Tab cancelled successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyParticipation(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { tabId } = req.params;
+      const { otpCode, accept } = req.body;
+
+      await tabService.verifyTabParticipation(req.user.id, tabId, otpCode, accept);
+
+      return sendSuccess(res, {
+        message: accept ? 'Tab participation accepted' : 'Tab participation declined',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resendOTP(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { tabId } = req.params;
+      await tabService.resendOTP(req.user.id, tabId);
+
+      return sendSuccess(res, { message: 'OTP resent successfully' });
     } catch (error) {
       next(error);
     }

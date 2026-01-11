@@ -9,12 +9,37 @@ import {
   tabIdParamSchema,
   getUserTabsSchema,
   createGroupTabSchema,
+  generateHashSchema,
+  submitTransactionSchema,
+  getWalletBalanceSchema,
+  verifyTabParticipationSchema,
 } from '../validators/tab.validators';
 
 const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+
+/**
+ * @route   GET /tabs/balance/:address
+ * @desc    Get user's USDC balance
+ * @access  Private
+ */
+router.get('/balance/:address', validate(getWalletBalanceSchema), tabController.getUSDCBalance);
+
+/**
+ * @route   POST /tabs/generate-hash
+ * @desc    Generate transaction hash for signing
+ * @access  Private
+ */
+router.post('/generate-hash', validate(generateHashSchema), tabController.generateHash);
+
+/**
+ * @route   POST /tabs/submit-transaction
+ * @desc    Submit signed transaction
+ * @access  Private
+ */
+router.post('/submit-transaction', validate(submitTransactionSchema), tabController.submitTransaction);
 
 /**
  * @route   POST /tabs
@@ -57,6 +82,20 @@ router.patch('/:tabId', validate(updateTabSchema), tabController.updateTab);
  * @access  Private
  */
 router.post('/:tabId/settle', validate(settlePaymentSchema), tabController.settlePayment);
+
+/**
+ * @route   POST /tabs/:tabId/verify-participation
+ * @desc    Verify OTP for tab participation
+ * @access  Private
+ */
+router.post('/:tabId/verify-participation', validate(verifyTabParticipationSchema), tabController.verifyParticipation);
+
+/**
+* @route   POST /tabs/:tabId/resend-otp
+* @desc    Resend OTP for tab participation
+* @access  Private
+*/
+router.post('/:tabId/resend-otp', validate(tabIdParamSchema), tabController.resendOTP);
 
 /**
  * @route   DELETE /tabs/:tabId
