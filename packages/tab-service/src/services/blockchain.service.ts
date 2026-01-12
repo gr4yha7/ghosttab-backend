@@ -186,14 +186,7 @@ export class BlockchainService {
     }
   }
 
-  /**
-   * Submit signed transaction
-   */
-  async submitSignedTx(rawTxnHex: string, publicKey: string, signature: string): Promise<{
-    success: boolean,
-    transactionHash: string,
-    vmStatus: string,
-  }> {
+  validatePublicKey(publicKey: string) {
     // Process the public key to ensure it's in the correct format
     let processedPublicKey = publicKey;
 
@@ -210,7 +203,19 @@ export class BlockchainService {
       throw new Error(`Invalid public key length: expected 64 characters, got ${processedPublicKey.length}. Key: ${processedPublicKey}`);
     }
 
+    return processedPublicKey;
+  }
+
+  /**
+   * Submit signed transaction
+   */
+  async submitSignedTx(rawTxnHex: string, publicKey: string, signature: string): Promise<{
+    success: boolean,
+    transactionHash: string,
+    vmStatus: string,
+  }> {
     try {
+      const processedPublicKey = this.validatePublicKey(publicKey);
       const senderAuthenticator = new AccountAuthenticatorEd25519(
         new Ed25519PublicKey(processedPublicKey),
         new Ed25519Signature(signature)
@@ -314,28 +319,82 @@ export class BlockchainService {
     }
   }
 
-  async sponsorTransaction(transaction: string, senderAuth: string): Promise<PendingTransactionResponse> {
+  async sponsorTransaction(rawTxnHex: string, publicKey: string, signature: string): Promise<{
+    success: boolean,
+    transactionHash: string,
+    vmStatus: string,
+  }> {
     try {
-      // Step 1: Sponsor and submit the transaction
-      // First, deserialize the SimpleTransaction and sender AccountAuthenticator sent from the FE
-      const simpleTx = SimpleTransaction.deserialize(new Deserializer(Hex.fromHexString(transaction).toUint8Array()));
-      const senderSig = AccountAuthenticator.deserialize(new Deserializer(Hex.fromHexString(senderAuth).toUint8Array()));
-      const pendingTransaction = await gasStationClient.sponsorAndSubmitSignedTransaction(simpleTx, senderSig);
+      logger.info("Received public key:", publicKey);
+      logger.info("Received signature:", signature);
+      const processedPublicKey = this.validatePublicKey(publicKey);
 
-      // Step 2: Send the PendingTransactionResponse back to the FE
-      return pendingTransaction
+      const senderAuthenticator = new AccountAuthenticatorEd25519(
+        new Ed25519PublicKey(processedPublicKey),
+        new Ed25519Signature(signature)
+      );
+
+      const senderAuthBytes = senderAuthenticator.bcsToBytes()
+
+      // Deserialize the transaction
+      const transactionBytes = Hex.fromHexString(rawTxnHex).toUint8Array();
+      const simpleTx = SimpleTransaction.deserialize(
+        new Deserializer(transactionBytes)
+      );
+
+      logger.info("Deserialized transaction:", {
+        sender: simpleTx.rawTransaction.sender.toString(),
+        sequenceNumber: simpleTx.rawTransaction.sequence_number.toString(),
+        maxGasAmount: simpleTx.rawTransaction.max_gas_amount.toString(),
+        gasUnitPrice: simpleTx.rawTransaction.gas_unit_price.toString(),
+        expirationTimestampSecs: simpleTx.rawTransaction.expiration_timestamp_secs.toString(),
+      });
+
+      // Deserialize the sender authenticator
+      const senderSig = AccountAuthenticator.deserialize(
+        new Deserializer(senderAuthBytes)
+      );
+
+      logger.info("Deserialized sender auth successfully");
+
+      // Sponsor and submit
+      logger.info("Submitting to Shinami Gas Station...");
+      logger.info("tx", simpleTx);
+      logger.info("sig", senderSig);
+
+      const pendingTxn = await gasStationClient.sponsorAndSubmitSignedTransaction(
+        simpleTx,
+        senderSig
+      );
+
+      logger.info("Transaction submitted successfully:", pendingTxn);
+      const executedTxn = await aptos.waitForTransaction({
+        transactionHash: pendingTxn.hash,
+      });
+
+      logger.info("✅ Transaction status:", executedTxn.success ? "SUCCESS" : "FAILED");
+      return {
+        success: executedTxn.success,
+        transactionHash: executedTxn.hash,
+        vmStatus: executedTxn.vm_status,
+      };
     } catch (error) {
-      logger.error('Failed to sponsor transaction', { transaction, error });
-      throw new Error('Failed to sponsor transaction');
+      if (error instanceof Error) {
+        logger.error('Failed to sponsor transaction', { error: error?.message || error });
+        throw new Error('Failed to sponsor blockchain transaction');
+      } else {
+        logger.error('Failed to sponsor transaction with unknown error', { error });
+        throw new Error('Failed to sponsor blockchain transaction');
+      }
     }
   }
 
-  async createTabTxSignature() {
+  async createTabTxSignature(): Promise<void> {
     const privateKeyHex = "The ADMIN_PRIVATE_KEY"; // Replace with your actual private key
     const privateKey = new Ed25519PrivateKey(privateKeyHex);
     const account = Account.fromPrivateKey({ privateKey });
 
-    console.log("Creating tab from account:", account.accountAddress.toString());
+    logger.info("Creating tab from account:", account.accountAddress.toString());
 
     try {
       const transaction = await aptos.transaction.build.simple({
@@ -397,15 +456,15 @@ export class BlockchainService {
       //     }
 
       //     const data = await response.json();
-      //     console.log('Success:', data);
-      //     console.log("✅ Transaction submitted:", data.hash.hash);
+      //     logger.info('Success:', data);
+      //     logger.info("✅ Transaction submitted:", data.hash.hash);
 
       //     const executedTransaction = await aptos.waitForTransaction({
       //       transactionHash: data.hash.hash,
       //     });
 
-      //     console.log("✅ Transaction status:", executedTransaction.success ? "SUCCESS" : "FAILED");
-      //     console.log("🔍 View on explorer: https://explorer.movementnetwork.xyz/txn/" + data.hash.hash);
+      //     logger.info("✅ Transaction status:", executedTransaction.success ? "SUCCESS" : "FAILED");
+      //     logger.info("🔍 View on explorer: https://explorer.movementnetwork.xyz/txn/" + data.hash.hash);
 
       // } catch (error) {
       //     console.error('Error:', error);

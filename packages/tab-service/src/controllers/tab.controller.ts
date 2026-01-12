@@ -17,7 +17,8 @@ export class TabController {
   async submitTransaction(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const { rawTxnHex, publicKey, signature } = req.body;
-      const result = await blockchainService.submitSignedTx(rawTxnHex, publicKey, signature);
+      const result = await blockchainService.sponsorTransaction(rawTxnHex, publicKey, signature);
+      // const result = await blockchainService.submitSignedTx(rawTxnHex, publicKey, signature);
       return sendSuccess(res, result);
     } catch (error) {
       next(error);
