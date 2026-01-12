@@ -20,7 +20,8 @@ import {
   Ed25519PrivateKey,
   Account,
   AccountAuthenticatorEd25519,
-  generateSigningMessageForTransaction
+  generateSigningMessageForTransaction,
+  UserTransactionResponse
 } from "@aptos-labs/ts-sdk";
 import { toHex } from 'viem';
 
@@ -162,6 +163,7 @@ export class BlockchainService {
       const senderAddress = AccountAddress.from(sender);
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
+        withFeePayer: true,
         data: {
           function: "0x1::primary_fungible_store::transfer",
           typeArguments: ["0x1::fungible_asset::Metadata"],
@@ -325,8 +327,6 @@ export class BlockchainService {
     vmStatus: string,
   }> {
     try {
-      logger.info("Received public key:", publicKey);
-      logger.info("Received signature:", signature);
       const processedPublicKey = this.validatePublicKey(publicKey);
 
       const senderAuthenticator = new AccountAuthenticatorEd25519(
@@ -335,12 +335,19 @@ export class BlockchainService {
       );
 
       const senderAuthBytes = senderAuthenticator.bcsToBytes()
+      // Deserialize the sender authenticator
+      const senderSig = AccountAuthenticator.deserialize(
+        new Deserializer(senderAuthBytes)
+      );
 
-      // Deserialize the transaction
       const transactionBytes = Hex.fromHexString(rawTxnHex).toUint8Array();
       const simpleTx = SimpleTransaction.deserialize(
         new Deserializer(transactionBytes)
       );
+
+      logger.info("Submitting transaction to Shinami Gas Station for sponsorship...");
+      // Sponsor the transaction
+      const sponsorAuthenticator = await gasStationClient.sponsorTransaction(simpleTx);
 
       logger.info("Deserialized transaction:", {
         sender: simpleTx.rawTransaction.sender.toString(),
@@ -350,29 +357,17 @@ export class BlockchainService {
         expirationTimestampSecs: simpleTx.rawTransaction.expiration_timestamp_secs.toString(),
       });
 
-      // Deserialize the sender authenticator
-      const senderSig = AccountAuthenticator.deserialize(
-        new Deserializer(senderAuthBytes)
-      );
+      // Submit transaction
+      const pendingTxn = await aptos.transaction.submit.simple({
+        transaction: simpleTx,
+        senderAuthenticator: senderSig,
+        feePayerAuthenticator: sponsorAuthenticator,
+      });
 
-      logger.info("Deserialized sender auth successfully");
-
-      // Sponsor and submit
-      logger.info("Submitting to Shinami Gas Station...");
-      logger.info("tx", simpleTx);
-      logger.info("sig", senderSig);
-
-      const pendingTxn = await gasStationClient.sponsorAndSubmitSignedTransaction(
-        simpleTx,
-        senderSig
-      );
-
-      logger.info("Transaction submitted successfully:", pendingTxn);
       const executedTxn = await aptos.waitForTransaction({
         transactionHash: pendingTxn.hash,
       });
-
-      logger.info("✅ Transaction status:", executedTxn.success ? "SUCCESS" : "FAILED");
+      logger.info("✅ Transaction status:", { status: executedTxn.success ? "SUCCESS" : "FAILED" });
       return {
         success: executedTxn.success,
         transactionHash: executedTxn.hash,
@@ -394,6 +389,8 @@ export class BlockchainService {
     const privateKey = new Ed25519PrivateKey(privateKeyHex);
     const account = Account.fromPrivateKey({ privateKey });
 
+    const REGISTRY_ADDRESS = "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8"
+
     logger.info("Creating tab from account:", account.accountAddress.toString());
 
     try {
@@ -401,7 +398,7 @@ export class BlockchainService {
         sender: account.accountAddress,
         withFeePayer: true,
         data: {
-          function: "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8::tab_manager::create_tab",
+          function: `${REGISTRY_ADDRESS}::tab_manager::create_tab`,
           functionArguments: [
             "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8", // registry_address
             "Restaurant Bill 2", // title
@@ -429,50 +426,28 @@ export class BlockchainService {
         transaction: transaction
       });
 
-      // Serialize to bytes for sending to backend
-      const transactionBytes = transaction.bcsToBytes();
-      const senderAuthBytes = senderAuth.bcsToBytes();
+      const backendRawTxn = SimpleTransaction.deserialize(new Deserializer(Hex.fromHexInput(transaction.bcsToBytes()).toUint8Array()));
 
-      // Convert to hex strings for JSON serialization
-      const transactionHex = Buffer.from(transactionBytes).toString('hex');
-      const senderAuthHex = Buffer.from(senderAuthBytes).toString('hex');
+      const pendingTxn = await aptos.transaction.submit.simple({
+        transaction: backendRawTxn,
+        senderAuthenticator: senderAuth,
+      });
 
+      const executedTransaction = await aptos.waitForTransaction({
+        transactionHash: pendingTxn.hash,
+      }) as UserTransactionResponse;
 
-      // try {
-      //     const response = await fetch(apiEndpoint, {
-      //         method: 'POST',
-      //         headers: {
-      //             'Content-Type': 'application/json',
-      //         },
-      //         body: JSON.stringify({ 
-      //             transaction: transactionHex,
-      //             senderAuth: senderAuthHex
-      //           }),
-      //     });
-
-      //     // Still need to check for HTTP errors manually as fetch only rejects on network errors
-      //     if (!response.ok) {
-      //         throw new Error(`HTTP error! status: ${response.status}`);
-      //     }
-
-      //     const data = await response.json();
-      //     logger.info('Success:', data);
-      //     logger.info("✅ Transaction submitted:", data.hash.hash);
-
-      //     const executedTransaction = await aptos.waitForTransaction({
-      //       transactionHash: data.hash.hash,
-      //     });
-
-      //     logger.info("✅ Transaction status:", executedTransaction.success ? "SUCCESS" : "FAILED");
-      //     logger.info("🔍 View on explorer: https://explorer.movementnetwork.xyz/txn/" + data.hash.hash);
-
-      // } catch (error) {
-      //     console.error('Error:', error);
-      // }
-
-
+      if (executedTransaction.success) {
+        for (var element in executedTransaction.events) {
+          if (executedTransaction.events[element].type == `${REGISTRY_ADDRESS}::tab_manager::TabCreatedEvent`) {
+            logger.info(`Tab created: "${executedTransaction.events[element].data.tab_id}"`);
+          }
+        }
+      } else {
+        logger.info("Transaction did not execute successfully.");
+      }
     } catch (error) {
-      console.error("❌ Error creating tab:", error);
+      logger.error("❌ Error creating tab:", error);
     }
   }
 }
