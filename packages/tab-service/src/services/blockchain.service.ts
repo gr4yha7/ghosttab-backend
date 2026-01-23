@@ -384,14 +384,34 @@ export class BlockchainService {
     }
   }
 
-  async createTabTxSignature(): Promise<void> {
-    const privateKeyHex = "The ADMIN_PRIVATE_KEY"; // Replace with your actual private key
+  async createOnChainTab(data: {
+    title: string;
+    description: string;
+    totalAmount: number;
+    settlerWallet: string;
+    groupId?: string;
+    settlementDeadline: number;
+    penaltyRate: number;
+    category: string;
+    streamChannelId: string;
+    memberPrivyIds: string[];
+    memberWallets: string[];
+    memberAmounts: number[];
+  }): Promise<string> {
+    const privateKeyHex = config.movement.tabManagerPrivateKey;
+    if (!privateKeyHex) {
+      throw new Error('TAB_MANAGER_PRIVATE_KEY not configured');
+    }
+
     const privateKey = new Ed25519PrivateKey(privateKeyHex);
     const account = Account.fromPrivateKey({ privateKey });
 
-    const REGISTRY_ADDRESS = "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8"
+    const REGISTRY_ADDRESS = config.movement.ghosttabSettlementAddress; // Assuming this is the registry/manager address
 
-    logger.info("Creating tab from account:", account.accountAddress.toString());
+    logger.info("Creating on-chain tab from account:", {
+      address: account.accountAddress.toString(),
+      title: data.title
+    });
 
     try {
       const transaction = await aptos.transaction.build.simple({
@@ -400,26 +420,22 @@ export class BlockchainService {
         data: {
           function: `${REGISTRY_ADDRESS}::tab_manager::create_tab`,
           functionArguments: [
-            "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8", // registry_address
-            "Restaurant Bill 2", // title
-            "Splitting the dinner bill from Friday night", // description
-            2000000, // total_amount (2 USDC with 6 decimals)
-            "0x03842b58e83a22f97d49fe3acfb401421c86bc88f37634e652a14279b6b98d4e", // settler_wallet
-            "group_xyz", // group_id
-            1736640000, // settlement_deadline (Unix timestamp)
-            500, // penalty_rate (5% in basis points)
-            "Food", // category
-            "stream_channel_001", // stream_channel_id
-            ["privy_alice", "privy_bob"], // member_privy_ids (vector)
-            [
-              "0x1abde24a62871764cc91433ecaacefc18bd1ecf9775442ebea0f50a4c2d87bc8",
-              "0xa2e0c299a145db4405b8d8922a45f075e8c6075aa79d8164170426dfde2913ef"
-            ], // member_wallets (vector)
-            [1000000, 1000000] // member_amounts (vector - 1 USDC each)
+            REGISTRY_ADDRESS,
+            data.title,
+            data.description,
+            data.totalAmount,
+            data.settlerWallet,
+            data.groupId || "",
+            data.settlementDeadline,
+            data.penaltyRate,
+            data.category,
+            data.streamChannelId,
+            data.memberPrivyIds,
+            data.memberWallets,
+            data.memberAmounts,
           ],
         },
       });
-
 
       const senderAuth = aptos.transaction.sign({
         signer: account,
@@ -438,16 +454,24 @@ export class BlockchainService {
       }) as UserTransactionResponse;
 
       if (executedTransaction.success) {
-        for (var element in executedTransaction.events) {
-          if (executedTransaction.events[element].type == `${REGISTRY_ADDRESS}::tab_manager::TabCreatedEvent`) {
-            logger.info(`Tab created: "${executedTransaction.events[element].data.tab_id}"`);
+        for (const event of executedTransaction.events) {
+          if (event.type === `${REGISTRY_ADDRESS}::tab_manager::TabCreatedEvent`) {
+            const tabId = event.data.tab_id;
+            logger.info(`On-chain tab created successfully`, { tabId });
+            return tabId;
           }
         }
+        throw new Error('TabCreatedEvent not found in transaction events');
       } else {
-        logger.info("Transaction did not execute successfully.");
+        logger.error("On-chain tab transaction failed", {
+          hash: executedTransaction.hash,
+          vmStatus: executedTransaction.vm_status
+        });
+        throw new Error(`Blockchain transaction failed: ${executedTransaction.vm_status}`);
       }
     } catch (error) {
-      logger.error("❌ Error creating tab:", error);
+      logger.error("Error creating on-chain tab", { error });
+      throw error;
     }
   }
 }
