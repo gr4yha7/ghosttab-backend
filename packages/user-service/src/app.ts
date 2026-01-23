@@ -7,6 +7,7 @@ import { config } from './config';
 import userRoutes from './routes/user.routes';
 import groupRoutes from './routes/group.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import adminRoutes from './routes/admin.routes';
 
 export const createApp = (): Application => {
   const app = express();
@@ -40,6 +41,7 @@ export const createApp = (): Application => {
   app.use('/users', userRoutes);
   app.use('/users/groups', groupRoutes);
   app.use('/users/analytics', analyticsRoutes);
+  app.use('/admin', adminRoutes);
 
   // Root health check
   app.get('/', (req: Request, res: Response) => {
