@@ -14,6 +14,7 @@ export type {
   TabCategory,
   TransactionType,
   GroupRole,
+  TabSplitType,
 } from './types/states.types';
 export type {
   AuthenticatedRequest,

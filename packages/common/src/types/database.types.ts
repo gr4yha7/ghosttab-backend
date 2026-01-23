@@ -39,6 +39,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      chains: {
+        Row: {
+          autosettle_supported: boolean | null
+          contract_address: string
+          created_at: string | null
+          id: string
+          name: string
+          supported_currencies: Json | null
+          updated_at: string | null
+          vault_address: string
+        }
+        Insert: {
+          autosettle_supported?: boolean | null
+          contract_address: string
+          created_at?: string | null
+          id?: string
+          name: string
+          supported_currencies?: Json | null
+          updated_at?: string | null
+          vault_address: string
+        }
+        Update: {
+          autosettle_supported?: boolean | null
+          contract_address?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          supported_currencies?: Json | null
+          updated_at?: string | null
+          vault_address?: string
+        }
+        Relationships: []
+      }
       friendships: {
         Row: {
           created_at: string | null
@@ -330,15 +363,22 @@ export type Database = {
         Row: {
           auto_settle_enabled: boolean | null
           category: Database["public"]["Enums"]["tab_category"] | null
+          chain_id: string | null
           created_at: string | null
           creator_id: string
           currency: string | null
           description: string | null
+          frequency: string | null
           group_id: string | null
           id: string
+          last_recurred_at: string | null
+          onchain_tab_id: string | null
+          payers: Json | null
+          penalty_config: Json | null
           penalty_rate: number | null
           settlement_deadline: string | null
           settlement_wallet: string
+          split_type: Database["public"]["Enums"]["tab_split_type"] | null
           status: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id: string | null
           title: string
@@ -348,15 +388,22 @@ export type Database = {
         Insert: {
           auto_settle_enabled?: boolean | null
           category?: Database["public"]["Enums"]["tab_category"] | null
+          chain_id?: string | null
           created_at?: string | null
           creator_id: string
           currency?: string | null
           description?: string | null
+          frequency?: string | null
           group_id?: string | null
           id?: string
+          last_recurred_at?: string | null
+          onchain_tab_id?: string | null
+          payers?: Json | null
+          penalty_config?: Json | null
           penalty_rate?: number | null
           settlement_deadline?: string | null
           settlement_wallet: string
+          split_type?: Database["public"]["Enums"]["tab_split_type"] | null
           status?: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id?: string | null
           title: string
@@ -366,15 +413,22 @@ export type Database = {
         Update: {
           auto_settle_enabled?: boolean | null
           category?: Database["public"]["Enums"]["tab_category"] | null
+          chain_id?: string | null
           created_at?: string | null
           creator_id?: string
           currency?: string | null
           description?: string | null
+          frequency?: string | null
           group_id?: string | null
           id?: string
+          last_recurred_at?: string | null
+          onchain_tab_id?: string | null
+          payers?: Json | null
+          penalty_config?: Json | null
           penalty_rate?: number | null
           settlement_deadline?: string | null
           settlement_wallet?: string
+          split_type?: Database["public"]["Enums"]["tab_split_type"] | null
           status?: Database["public"]["Enums"]["tab_status"] | null
           stream_channel_id?: string | null
           title?: string
@@ -382,6 +436,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tabs_chain_id_fkey"
+            columns: ["chain_id"]
+            isOneToOne: false
+            referencedRelation: "chains"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tabs_creator_id_fkey"
             columns: ["creator_id"]
@@ -500,6 +561,48 @@ export type Database = {
           },
         ]
       }
+      user_wallets: {
+        Row: {
+          chain_id: string
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+          wallet_address: string
+        }
+        Insert: {
+          chain_id: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+          wallet_address: string
+        }
+        Update: {
+          chain_id?: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+          wallet_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_wallets_chain_id_fkey"
+            columns: ["chain_id"]
+            isOneToOne: false
+            referencedRelation: "chains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_wallets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auto_settle: boolean | null
@@ -509,6 +612,7 @@ export type Database = {
           email: string | null
           id: string
           phone: string | null
+          role: Database["public"]["Enums"]["user_role"] | null
           settlements_late: number | null
           settlements_on_time: number | null
           stream_token: string | null
@@ -527,6 +631,7 @@ export type Database = {
           email?: string | null
           id: string
           phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
           settlements_late?: number | null
           settlements_on_time?: number | null
           stream_token?: string | null
@@ -545,6 +650,7 @@ export type Database = {
           email?: string | null
           id?: string
           phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
           settlements_late?: number | null
           settlements_on_time?: number | null
           stream_token?: string | null
@@ -576,36 +682,38 @@ export type Database = {
       friendship_status: "PENDING" | "ACCEPTED" | "BLOCKED"
       group_role: "CREATOR" | "ADMIN" | "MEMBER"
       notification_type:
-      | "FRIEND_REQUEST"
-      | "FRIEND_ACCEPTED"
-      | "TAB_CREATED"
-      | "TAB_UPDATED"
-      | "PAYMENT_RECEIVED"
-      | "PAYMENT_REMINDER"
-      | "TAB_SETTLED"
-      | "MESSAGE_RECEIVED"
-      | "TAB_PARTICIPATION"
-      | "GROUP_CREATED"
-      | "GROUP_MEMBER_ADDED"
-      | "GROUP_MEMBER_REMOVED"
-      | "GROUP_ROLE_UPDATED"
-      | "GROUP_TAB_CREATED"
+        | "FRIEND_REQUEST"
+        | "FRIEND_ACCEPTED"
+        | "TAB_CREATED"
+        | "TAB_UPDATED"
+        | "PAYMENT_RECEIVED"
+        | "PAYMENT_REMINDER"
+        | "TAB_SETTLED"
+        | "MESSAGE_RECEIVED"
+        | "TAB_PARTICIPATION"
+        | "GROUP_CREATED"
+        | "GROUP_MEMBER_ADDED"
+        | "GROUP_MEMBER_REMOVED"
+        | "GROUP_ROLE_UPDATED"
+        | "GROUP_TAB_CREATED"
       tab_category:
-      | "DINING"
-      | "TRAVEL"
-      | "GROCERIES"
-      | "ENTERTAINMENT"
-      | "UTILITIES"
-      | "GIFTS"
-      | "TRANSPORTATION"
-      | "ACCOMMODATION"
-      | "OTHER"
+        | "DINING"
+        | "TRAVEL"
+        | "GROCERIES"
+        | "ENTERTAINMENT"
+        | "UTILITIES"
+        | "GIFTS"
+        | "TRANSPORTATION"
+        | "ACCOMMODATION"
+        | "OTHER"
+      tab_split_type: "EVENLY" | "PERCENTAGE" | "SHARES" | "CUSTOM"
       tab_status: "OPEN" | "SETTLED" | "CANCELLED"
       transaction_type:
-      | "PAYMENT"
-      | "SETTLEMENT"
-      | "VAULT_DEPOSIT"
-      | "VAULT_WITHDRAWAL"
+        | "PAYMENT"
+        | "SETTLEMENT"
+        | "VAULT_DEPOSIT"
+        | "VAULT_WITHDRAWAL"
+      user_role: "USER" | "ADMIN"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -619,116 +727,116 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-  : never = never,
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-  ? R
-  : never
+    ? R
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-    DefaultSchema["Views"])
-  ? (DefaultSchema["Tables"] &
-    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-      Row: infer R
-    }
-  ? R
-  : never
-  : never
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-  | keyof DefaultSchema["Tables"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-    Insert: infer I
-  }
-  ? I
-  : never
+      Insert: infer I
+    }
+    ? I
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-    Insert: infer I
-  }
-  ? I
-  : never
-  : never
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-  | keyof DefaultSchema["Tables"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-    Update: infer U
-  }
-  ? U
-  : never
+      Update: infer U
+    }
+    ? U
+    : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-    Update: infer U
-  }
-  ? U
-  : never
-  : never
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-  | keyof DefaultSchema["Enums"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-  : never
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-  | keyof DefaultSchema["CompositeTypes"]
-  | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-  : never = never,
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-  : never
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
 
 export const Constants = {
   graphql_public: {
@@ -765,6 +873,7 @@ export const Constants = {
         "ACCOMMODATION",
         "OTHER",
       ],
+      tab_split_type: ["EVENLY", "PERCENTAGE", "SHARES", "CUSTOM"],
       tab_status: ["OPEN", "SETTLED", "CANCELLED"],
       transaction_type: [
         "PAYMENT",
@@ -772,6 +881,7 @@ export const Constants = {
         "VAULT_DEPOSIT",
         "VAULT_WITHDRAWAL",
       ],
+      user_role: ["USER", "ADMIN"],
     },
   },
 } as const
